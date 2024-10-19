@@ -9,6 +9,8 @@ from chatbot import Chatbot
 from dotenv import load_dotenv
 import uvicorn
 from supabase import create_client, Client
+from datetime import datetime
+import json
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +30,13 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Add session middleware
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY"))
+
+# Custom JSON encoder for datetime objects
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, datetime):
+            return o.isoformat()
+        return super().default(o)
 
 # Initialize Supabase client
 try:
@@ -92,7 +101,10 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
         raise HTTPException(status_code=500, detail="Supabase client not initialized")
     try:
         response = supabase.auth.sign_in_with_password({"email": email, "password": password})
-        request.session["user"] = response.user.dict()
+        user_dict = response.user.dict()
+        # Convert datetime objects to ISO format strings
+        user_dict = json.loads(json.dumps(user_dict, cls=DateTimeEncoder))
+        request.session["user"] = user_dict
         return RedirectResponse(url="/", status_code=303)
     except Exception as e:
         logger.error(f"Login error: {str(e)}")
@@ -104,7 +116,10 @@ async def signup(request: Request, email: str = Form(...), password: str = Form(
         raise HTTPException(status_code=500, detail="Supabase client not initialized")
     try:
         response = supabase.auth.sign_up({"email": email, "password": password})
-        request.session["user"] = response.user.dict()
+        user_dict = response.user.dict()
+        # Convert datetime objects to ISO format strings
+        user_dict = json.loads(json.dumps(user_dict, cls=DateTimeEncoder))
+        request.session["user"] = user_dict
         return RedirectResponse(url="/", status_code=303)
     except Exception as e:
         logger.error(f"Signup error: {str(e)}")
