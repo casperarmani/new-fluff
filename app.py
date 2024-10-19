@@ -13,6 +13,7 @@ from supabase import create_client, Client
 from datetime import datetime
 import json
 from gotrue.errors import AuthApiError
+import uuid
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -92,11 +93,11 @@ async def auth_status(request: Request):
     session = request.session
     return JSONResponse({"authenticated": "user" in session})
 
-# New function to insert chat message into user_chat_history table
-async def insert_chat_message(user_id: int, message: str, chat_type: str = 'text'):
+# Updated function to insert chat message into user_chat_history table
+async def insert_chat_message(user_id: uuid.UUID, message: str, chat_type: str = 'text'):
     try:
         response = supabase.table('user_chat_history').insert({
-            'user_id': user_id,
+            'user_id': str(user_id),
             'message': message,
             'chat_type': chat_type
         }).execute()
@@ -105,11 +106,11 @@ async def insert_chat_message(user_id: int, message: str, chat_type: str = 'text
         logger.error(f"Error inserting chat message: {str(e)}")
         return None
 
-# New function to insert video analysis into video_analysis_output table
-async def insert_video_analysis(user_id: int, upload_file_name: str, analysis: str):
+# Updated function to insert video analysis into video_analysis_output table
+async def insert_video_analysis(user_id: uuid.UUID, upload_file_name: str, analysis: str):
     try:
         response = supabase.table('video_analysis_output').insert({
-            'user_id': user_id,
+            'user_id': str(user_id),
             'upload_file_name': upload_file_name,
             'analysis': analysis
         }).execute()
@@ -118,19 +119,19 @@ async def insert_video_analysis(user_id: int, upload_file_name: str, analysis: s
         logger.error(f"Error inserting video analysis: {str(e)}")
         return None
 
-# New function to retrieve chat history for a user
-async def get_chat_history(user_id: int, limit: int = 50):
+# Updated function to retrieve chat history for a user
+async def get_chat_history(user_id: uuid.UUID, limit: int = 50):
     try:
-        response = supabase.table('user_chat_history').select('*').eq('user_id', user_id).order('TIMESTAMP', desc=True).limit(limit).execute()
+        response = supabase.table('user_chat_history').select('*').eq('user_id', str(user_id)).order('TIMESTAMP', desc=True).limit(limit).execute()
         return response.data
     except Exception as e:
         logger.error(f"Error retrieving chat history: {str(e)}")
         return []
 
-# New function to retrieve video analysis history for a user
-async def get_video_analysis_history(user_id: int, limit: int = 10):
+# Updated function to retrieve video analysis history for a user
+async def get_video_analysis_history(user_id: uuid.UUID, limit: int = 10):
     try:
-        response = supabase.table('video_analysis_output').select('*').eq('user_id', user_id).order('TIMESTAMP', desc=True).limit(limit).execute()
+        response = supabase.table('video_analysis_output').select('*').eq('user_id', str(user_id)).order('TIMESTAMP', desc=True).limit(limit).execute()
         return response.data
     except Exception as e:
         logger.error(f"Error retrieving video analysis history: {str(e)}")
@@ -143,7 +144,7 @@ async def send_message(
     video: UploadFile = File(None),
     user: dict = Depends(get_current_user)
 ):
-    user_id = user['id']
+    user_id = uuid.UUID(user['id'])
     if video:
         # Save the uploaded file temporarily
         video_path = os.path.join('temp', video.filename)
@@ -173,13 +174,13 @@ async def send_message(
 
 @app.get("/chat_history")
 async def chat_history(request: Request, user: dict = Depends(get_current_user)):
-    user_id = user['id']
+    user_id = uuid.UUID(user['id'])
     history = await get_chat_history(user_id)
     return JSONResponse({"history": history})
 
 @app.get("/video_analysis_history")
 async def video_analysis_history(request: Request, user: dict = Depends(get_current_user)):
-    user_id = user['id']
+    user_id = uuid.UUID(user['id'])
     history = await get_video_analysis_history(user_id)
     return JSONResponse({"history": history})
 
