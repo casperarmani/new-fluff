@@ -14,6 +14,7 @@ from datetime import datetime
 import json
 from gotrue.errors import AuthApiError
 import uuid
+from database import create_user, get_user_by_username, insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -93,50 +94,6 @@ async def auth_status(request: Request):
     session = request.session
     return JSONResponse({"authenticated": "user" in session})
 
-# Updated function to insert chat message into user_chat_history table
-async def insert_chat_message(user_id: uuid.UUID, message: str, chat_type: str = 'text'):
-    try:
-        response = supabase.table('user_chat_history').insert({
-            'user_id': str(user_id),
-            'message': message,
-            'chat_type': chat_type
-        }).execute()
-        return response.data[0] if response.data else None
-    except Exception as e:
-        logger.error(f"Error inserting chat message: {str(e)}")
-        return None
-
-# Updated function to insert video analysis into video_analysis_output table
-async def insert_video_analysis(user_id: uuid.UUID, upload_file_name: str, analysis: str):
-    try:
-        response = supabase.table('video_analysis_output').insert({
-            'user_id': str(user_id),
-            'upload_file_name': upload_file_name,
-            'analysis': analysis
-        }).execute()
-        return response.data[0] if response.data else None
-    except Exception as e:
-        logger.error(f"Error inserting video analysis: {str(e)}")
-        return None
-
-# Updated function to retrieve chat history for a user
-async def get_chat_history(user_id: uuid.UUID, limit: int = 50):
-    try:
-        response = supabase.table('user_chat_history').select('*').eq('user_id', str(user_id)).order('TIMESTAMP', desc=True).limit(limit).execute()
-        return response.data
-    except Exception as e:
-        logger.error(f"Error retrieving chat history: {str(e)}")
-        return []
-
-# Updated function to retrieve video analysis history for a user
-async def get_video_analysis_history(user_id: uuid.UUID, limit: int = 10):
-    try:
-        response = supabase.table('video_analysis_output').select('*').eq('user_id', str(user_id)).order('TIMESTAMP', desc=True).limit(limit).execute()
-        return response.data
-    except Exception as e:
-        logger.error(f"Error retrieving video analysis history: {str(e)}")
-        return []
-
 @app.post("/send_message")
 async def send_message(
     request: Request,
@@ -213,6 +170,11 @@ async def signup(request: Request, email: str = Form(...), password: str = Form(
         # Convert datetime objects to ISO format strings
         user_dict = json.loads(json.dumps(user_dict, cls=DateTimeEncoder))
         request.session["user"] = user_dict
+        
+        # Create a new user in the 'users' table
+        username = email.split('@')[0]  # Use the part before @ as the username
+        created_user = create_user(username)
+        
         return JSONResponse({"success": True, "message": "Signup successful"})
     except AuthApiError as e:
         logger.error(f"Signup error: {str(e)}")
