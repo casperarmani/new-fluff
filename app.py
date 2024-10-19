@@ -55,7 +55,7 @@ async def index(request: Request):
     return HTMLResponse(content=html_content)
 
 @app.get('/login', response_class=HTMLResponse)
-async def login(request: Request):
+async def login_page(request: Request):
     with open("templates/login.html", "r") as f:
         return HTMLResponse(content=f.read())
 
@@ -80,7 +80,7 @@ async def login_post(request: Request, email: str = Form(...), password: str = F
         return JSONResponse({"success": False, "message": str(e)}, status_code=400)
 
 @app.get('/signup', response_class=HTMLResponse)
-async def signup(request: Request):
+async def signup_page(request: Request):
     with open("templates/signup.html", "r") as f:
         return HTMLResponse(content=f.read())
 
