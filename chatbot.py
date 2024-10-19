@@ -3,7 +3,6 @@ import time
 import logging
 import google.generativeai as genai
 from dotenv import load_dotenv
-from supabase import create_client, Client
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -45,16 +44,6 @@ class Chatbot:
                 },
             ]
         )
-        self.supabase = self.initialize_supabase_client()
-
-    def initialize_supabase_client(self):
-        supabase_url = os.getenv("SUPABASE_URL")
-        supabase_anon_key = os.getenv("SUPABASE_ANON_KEY")
-        
-        if not supabase_url or not supabase_anon_key:
-            raise ValueError("SUPABASE_URL or SUPABASE_ANON_KEY is missing")
-        
-        return create_client(supabase_url, supabase_anon_key)
 
     def send_message(self, message):
         try:
@@ -87,19 +76,3 @@ class Chatbot:
         except Exception as e:
             logger.error(f"Error analyzing video: {str(e)}")
             return f"An error occurred during video analysis: {str(e)}"
-
-    def get_chat_history(self, user_id, limit=50):
-        try:
-            response = self.supabase.table("chat_history").select("*").eq("user_id", user_id).order("timestamp", desc=True).limit(limit).execute()
-            return response.data
-        except Exception as e:
-            logger.error(f"Error fetching chat history: {str(e)}")
-            return []
-
-    def get_video_analysis_history(self, user_id, limit=10):
-        try:
-            response = self.supabase.table("video_analysis").select("*").eq("user_id", user_id).order("timestamp", desc=True).limit(limit).execute()
-            return response.data
-        except Exception as e:
-            logger.error(f"Error fetching video analysis history: {str(e)}")
-            return []
