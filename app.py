@@ -63,6 +63,57 @@ def initialize_supabase_client(max_retries=3, retry_delay=5):
 
 supabase = initialize_supabase_client()
 
+def create_tables_and_policies():
+    if not supabase:
+        raise ValueError("Supabase client not initialized")
+
+    sql_commands = """
+    -- Create chat_history table
+    CREATE TABLE IF NOT EXISTS chat_history (
+        id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+        user_id UUID NOT NULL,
+        message TEXT NOT NULL,
+        is_bot BOOLEAN NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        FOREIGN KEY (user_id) REFERENCES auth.users(id)
+    );
+
+    -- Create video_analysis_history table
+    CREATE TABLE IF NOT EXISTS video_analysis_history (
+        id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+        user_id UUID NOT NULL,
+        video_filename TEXT NOT NULL,
+        analysis_output TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        FOREIGN KEY (user_id) REFERENCES auth.users(id)
+    );
+
+    -- Enable Row Level Security (RLS) for both tables
+    ALTER TABLE chat_history ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE video_analysis_history ENABLE ROW LEVEL SECURITY;
+
+    -- Create policies for chat_history
+    CREATE POLICY IF NOT EXISTS "Users can insert their own chat messages" 
+    ON chat_history FOR INSERT WITH CHECK (auth.uid() = user_id);
+    
+    CREATE POLICY IF NOT EXISTS "Users can read their own chat messages" 
+    ON chat_history FOR SELECT USING (auth.uid() = user_id);
+
+    -- Create policies for video_analysis_history
+    CREATE POLICY IF NOT EXISTS "Users can insert their own video analysis" 
+    ON video_analysis_history FOR INSERT WITH CHECK (auth.uid() = user_id);
+    
+    CREATE POLICY IF NOT EXISTS "Users can read their own video analysis" 
+    ON video_analysis_history FOR SELECT USING (auth.uid() = user_id);
+    """
+
+    try:
+        supabase.query(sql_commands).execute()
+        logger.info("Tables and policies created successfully")
+    except Exception as e:
+        logger.error(f"Error creating tables and policies: {str(e)}")
+        raise
+
 def get_current_user(request: Request):
     session = request.session
     if "user" not in session:
@@ -92,6 +143,24 @@ async def auth_status(request: Request):
     session = request.session
     return JSONResponse({"authenticated": "user" in session})
 
+@app.get("/chat_history")
+async def get_chat_history(user: dict = Depends(get_current_user)):
+    try:
+        response = supabase.table('chat_history').select('*').eq('user_id', user['id']).order('created_at').execute()
+        return JSONResponse(response.data)
+    except Exception as e:
+        logger.error(f"Error fetching chat history: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error fetching chat history")
+
+@app.get("/video_analysis_history")
+async def get_video_analysis_history(user: dict = Depends(get_current_user)):
+    try:
+        response = supabase.table('video_analysis_history').select('*').eq('user_id', user['id']).order('created_at', desc=True).execute()
+        return JSONResponse(response.data)
+    except Exception as e:
+        logger.error(f"Error fetching video analysis history: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error fetching video analysis history")
+
 @app.post("/send_message")
 async def send_message(
     request: Request,
@@ -109,6 +178,16 @@ async def send_message(
         # Analyze the video
         analysis_result = chatbot.analyze_video(video_path, message)
         
+        # Store video analysis in the database
+        try:
+            supabase.table('video_analysis_history').insert({
+                'user_id': user['id'],
+                'video_filename': video.filename,
+                'analysis_output': analysis_result
+            }).execute()
+        except Exception as e:
+            logger.error(f"Error storing video analysis: {str(e)}")
+        
         # Remove the temporary file
         os.remove(video_path)
         
@@ -116,6 +195,22 @@ async def send_message(
     else:
         # Handle text-only message
         response = chatbot.send_message(message)
+        
+        # Store chat message in the database
+        try:
+            supabase.table('chat_history').insert({
+                'user_id': user['id'],
+                'message': message,
+                'is_bot': False
+            }).execute()
+            supabase.table('chat_history').insert({
+                'user_id': user['id'],
+                'message': response,
+                'is_bot': True
+            }).execute()
+        except Exception as e:
+            logger.error(f"Error storing chat message: {str(e)}")
+        
         return {"response": response}
 
 @app.post("/login")
@@ -160,6 +255,13 @@ async def signup(request: Request, email: str = Form(...), password: str = Form(
 async def logout(request: Request):
     request.session.pop("user", None)
     return JSONResponse({"success": True, "message": "Logout successful"})
+
+@app.on_event("startup")
+async def startup_event():
+    try:
+        create_tables_and_policies()
+    except Exception as e:
+        logger.error(f"Error during startup: {str(e)}")
 
 if __name__ == '__main__':
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
