@@ -119,12 +119,8 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
         return JSONResponse({"success": True, "message": "Login successful"})
     except AuthApiError as e:
         logger.error(f"Login error: {str(e)}")
-        error_message = "Invalid email or password"
-        if e.status == 400:
-            error_message = "Invalid email format"
-        elif e.status == 429:
-            error_message = "Too many login attempts. Please try again later."
-        return JSONResponse({"success": False, "message": error_message}, status_code=e.status)
+        error_message = "Incorrect email or password. Please try again or reset your password if you've forgotten it."
+        return JSONResponse({"success": False, "message": error_message}, status_code=400)
     except Exception as e:
         logger.error(f"Login error: {str(e)}")
         return JSONResponse({"success": False, "message": "An unexpected error occurred during login"}, status_code=500)
@@ -142,12 +138,8 @@ async def signup(request: Request, email: str = Form(...), password: str = Form(
         return JSONResponse({"success": True, "message": "Signup successful"})
     except AuthApiError as e:
         logger.error(f"Signup error: {str(e)}")
-        error_message = "Unable to create account"
-        if e.status == 400:
-            error_message = "Invalid email format or weak password"
-        elif e.status == 429:
-            error_message = "Too many signup attempts. Please try again later."
-        return JSONResponse({"success": False, "message": error_message}, status_code=e.status)
+        error_message = "An account with this email address already exists. Please use a different email or try logging in."
+        return JSONResponse({"success": False, "message": error_message}, status_code=400)
     except Exception as e:
         logger.error(f"Signup error: {str(e)}")
         return JSONResponse({"success": False, "message": "An unexpected error occurred during signup"}, status_code=500)
