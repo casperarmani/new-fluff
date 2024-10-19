@@ -147,7 +147,7 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
         raise HTTPException(status_code=500, detail="Supabase client not initialized")
     try:
         response = supabase.auth.sign_in_with_password({"email": email, "password": password})
-        user_dict = response.user.dict()
+        user_dict = response.user.model_dump()
         # Convert datetime objects to ISO format strings
         user_dict = json.loads(json.dumps(user_dict, cls=DateTimeEncoder))
         request.session["user"] = user_dict
@@ -166,7 +166,7 @@ async def signup(request: Request, email: str = Form(...), password: str = Form(
         raise HTTPException(status_code=500, detail="Supabase client not initialized")
     try:
         response = supabase.auth.sign_up({"email": email, "password": password})
-        user_dict = response.user.dict()
+        user_dict = response.user.model_dump()
         # Convert datetime objects to ISO format strings
         user_dict = json.loads(json.dumps(user_dict, cls=DateTimeEncoder))
         request.session["user"] = user_dict
