@@ -10,7 +10,6 @@
 <body>
     <div class="container mt-4">
         <h1 class="mb-4">Gemini Chatbot with Video Analysis</h1>
-        <!-- USER_INFO -->
         <div class="card">
             <div class="card-body">
                 <div id="chat-messages" class="mb-4" style="height: 400px; overflow-y: auto;"></div>
@@ -47,10 +46,6 @@
                         method: 'POST',
                         body: formData
                     });
-                    if (response.status === 401) {
-                        window.location.href = '/login';
-                        return;
-                    }
                     const data = await response.json();
                     appendMessage('Chatbot', data.response);
                 } catch (error) {
