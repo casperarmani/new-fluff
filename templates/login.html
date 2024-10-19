@@ -41,6 +41,7 @@
                 });
                 const data = await response.json();
                 if (data.success) {
+                    localStorage.setItem('user', JSON.stringify(data.user));
                     window.location.href = '/';
                 } else {
                     document.getElementById('login-error').textContent = data.message;

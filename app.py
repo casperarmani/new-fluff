@@ -68,7 +68,14 @@ async def login_post(request: Request, email: str = Form(...), password: str = F
             'id': str(user.id),
             'email': user.email,
         }
-        return JSONResponse({"success": True, "message": "Login successful"})
+        return JSONResponse({
+            "success": True,
+            "message": "Login successful",
+            "user": {
+                "id": str(user.id),
+                "email": user.email
+            }
+        })
     except Exception as e:
         return JSONResponse({"success": False, "message": str(e)}, status_code=400)
 
@@ -100,13 +107,18 @@ async def logout(request: Request):
     request.session.pop('user', None)
     return JSONResponse({"success": True, "message": "Logout successful"})
 
+@app.get("/auth_status")
+async def auth_status(request: Request):
+    user = request.session.get('user')
+    return {"authenticated": user is not None}
+
 @app.post("/send_message")
 async def send_message(
     request: Request,
     message: str = Form(""),
-    video: UploadFile = File(None),
-    current_user: dict = Depends(get_current_user)
+    video: UploadFile = File(None)
 ):
+    current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     if video:
         video_path = os.path.join('temp', video.filename)
@@ -126,13 +138,15 @@ async def send_message(
         return {"response": response}
 
 @app.get("/chat_history")
-async def chat_history(current_user: dict = Depends(get_current_user)):
+async def chat_history(request: Request):
+    current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     history = await get_chat_history(user_id)
     return {"history": history}
 
 @app.get("/video_analysis_history")
-async def video_analysis_history(current_user: dict = Depends(get_current_user)):
+async def video_analysis_history(request: Request):
+    current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     history = await get_video_analysis_history(user_id)
     return {"history": history}

@@ -68,6 +68,10 @@
                     } else {
                         window.location.href = '/login';
                     }
+                })
+                .catch(error => {
+                    console.error('Error checking auth status:', error);
+                    window.location.href = '/login';
                 });
         }
 
