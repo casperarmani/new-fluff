@@ -17,20 +17,39 @@
             </button>
         </div>
         <div id="chat-section" style="display: none;">
-            <div class="card">
-                <div class="card-body">
-                    <div id="chat-messages" class="mb-4" style="height: 400px; overflow-y: auto;"></div>
-                    <div class="mb-3">
-                        <input type="text" id="user-input" class="form-control" placeholder="Type your message...">
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title">Chat</h5>
+                            <div id="chat-messages" class="mb-4" style="height: 400px; overflow-y: auto;"></div>
+                            <div class="mb-3">
+                                <input type="text" id="user-input" class="form-control" placeholder="Type your message...">
+                            </div>
+                            <div class="mb-3">
+                                <input type="file" id="video-file" accept="video/*" class="form-control">
+                            </div>
+                            <div class="d-flex justify-content-end">
+                                <button id="send-button" class="btn btn-primary">
+                                    <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                    Send
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <input type="file" id="video-file" accept="video/*" class="form-control">
+                </div>
+                <div class="col-md-4">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title">Chat History</h5>
+                            <div id="chat-history" style="height: 300px; overflow-y: auto;"></div>
+                        </div>
                     </div>
-                    <div class="d-flex justify-content-end">
-                        <button id="send-button" class="btn btn-primary">
-                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
-                            Send
-                        </button>
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Video Analysis History</h5>
+                            <div id="video-analysis-history" style="height: 300px; overflow-y: auto;"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -44,6 +63,8 @@
                     if (data.authenticated) {
                         document.getElementById('logout-button').style.display = 'block';
                         document.getElementById('chat-section').style.display = 'block';
+                        fetchChatHistory();
+                        fetchVideoAnalysisHistory();
                     } else {
                         window.location.href = '/login';
                     }
@@ -81,6 +102,10 @@
                     }
                     const data = await response.json();
                     appendMessage('Chatbot', data.response);
+                    fetchChatHistory();
+                    if (video) {
+                        fetchVideoAnalysisHistory();
+                    }
                 } catch (error) {
                     console.error('Error:', error);
                     appendMessage('Chatbot', 'An error occurred while processing your request.');
@@ -104,6 +129,47 @@
             messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
             chatMessages.appendChild(messageElement);
             chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function fetchChatHistory() {
+            fetch('/chat_history')
+                .then(response => response.json())
+                .then(data => {
+                    const chatHistory = document.getElementById('chat-history');
+                    chatHistory.innerHTML = '';
+                    data.forEach(item => {
+                        const chatContent = JSON.parse(item.chat_content);
+                        const historyItem = document.createElement('div');
+                        historyItem.className = 'mb-2';
+                        historyItem.innerHTML = `
+                            <small class="text-muted">${new Date(item.timestamp).toLocaleString()}</small><br>
+                            <strong>You:</strong> ${chatContent.user}<br>
+                            <strong>Chatbot:</strong> ${chatContent.bot}
+                        `;
+                        chatHistory.appendChild(historyItem);
+                    });
+                })
+                .catch(error => console.error('Error fetching chat history:', error));
+        }
+
+        function fetchVideoAnalysisHistory() {
+            fetch('/video_analysis_history')
+                .then(response => response.json())
+                .then(data => {
+                    const videoAnalysisHistory = document.getElementById('video-analysis-history');
+                    videoAnalysisHistory.innerHTML = '';
+                    data.forEach(item => {
+                        const historyItem = document.createElement('div');
+                        historyItem.className = 'mb-2';
+                        historyItem.innerHTML = `
+                            <small class="text-muted">${new Date(item.timestamp).toLocaleString()}</small><br>
+                            <strong>Video:</strong> ${item.video_filename}<br>
+                            <strong>Analysis:</strong> ${item.analysis_result.substring(0, 100)}...
+                        `;
+                        videoAnalysisHistory.appendChild(historyItem);
+                    });
+                })
+                .catch(error => console.error('Error fetching video analysis history:', error));
         }
 
         document.getElementById('logout-button').addEventListener('click', async function() {

@@ -13,6 +13,7 @@ from supabase import create_client, Client
 from datetime import datetime
 import json
 from gotrue.errors import AuthApiError
+import uuid
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -63,6 +64,36 @@ def initialize_supabase_client(max_retries=3, retry_delay=5):
 
 supabase = initialize_supabase_client()
 
+def create_tables():
+    if not supabase:
+        logger.error("Supabase client not initialized. Cannot create tables.")
+        return
+
+    try:
+        # Create chat_history table
+        supabase.table("chat_history").create({
+            "id": {"type": "uuid", "primary": True},
+            "user_id": {"type": "uuid", "references": "auth.users.id"},
+            "chat_content": {"type": "text"},
+            "timestamp": {"type": "timestamptz", "default": "now()"}
+        })
+        logger.info("chat_history table created successfully")
+
+        # Create video_analysis table
+        supabase.table("video_analysis").create({
+            "id": {"type": "uuid", "primary": True},
+            "user_id": {"type": "uuid", "references": "auth.users.id"},
+            "video_filename": {"type": "text"},
+            "analysis_result": {"type": "text"},
+            "timestamp": {"type": "timestamptz", "default": "now()"}
+        })
+        logger.info("video_analysis table created successfully")
+    except Exception as e:
+        logger.error(f"Error creating tables: {str(e)}")
+
+# Call create_tables function when the app starts
+create_tables()
+
 def get_current_user(request: Request):
     session = request.session
     if "user" not in session:
@@ -99,6 +130,11 @@ async def send_message(
     video: UploadFile = File(None),
     user: dict = Depends(get_current_user)
 ):
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Supabase client not initialized")
+
+    user_id = user["id"]
+
     if video:
         # Save the uploaded file temporarily
         video_path = os.path.join('temp', video.filename)
@@ -109,14 +145,30 @@ async def send_message(
         # Analyze the video
         analysis_result = chatbot.analyze_video(video_path, message)
         
+        # Store video analysis result in Supabase
+        supabase.table("video_analysis").insert({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "video_filename": video.filename,
+            "analysis_result": analysis_result
+        }).execute()
+        
         # Remove the temporary file
         os.remove(video_path)
         
-        return {"response": analysis_result}
+        response = analysis_result
     else:
         # Handle text-only message
         response = chatbot.send_message(message)
-        return {"response": response}
+
+    # Store chat message in Supabase
+    supabase.table("chat_history").insert({
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "chat_content": json.dumps({"user": message, "bot": response})
+    }).execute()
+
+    return {"response": response}
 
 @app.post("/login")
 async def login(request: Request, email: str = Form(...), password: str = Form(...)):
