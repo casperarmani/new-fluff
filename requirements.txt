@@ -13,3 +13,5 @@ email-validator
 flask
 flask-sqlalchemy
 psycopg2-binary
+supabase
+supabase==2.0.0

@@ -10,22 +10,73 @@
 <body>
     <div class="container mt-4">
         <h1 class="mb-4">Gemini Chatbot with Video Analysis</h1>
-        <div class="card">
-            <div class="card-body">
-                <div id="chat-messages" class="mb-4" style="height: 400px; overflow-y: auto;"></div>
-                <div class="mb-3">
-                    <input type="text" id="user-input" class="form-control" placeholder="Type your message...">
-                </div>
-                <div class="mb-3">
-                    <input type="file" id="video-file" accept="video/*" class="form-control">
-                </div>
-                <div class="d-flex justify-content-end">
-                    <button onclick="sendMessage()" class="btn btn-primary">Send</button>
+        <div id="auth-section" class="mb-4">
+            <div id="login-form">
+                <h2>Login</h2>
+                <form action="/login" method="post">
+                    <div class="mb-3">
+                        <input type="email" name="email" class="form-control" placeholder="Email" required>
+                    </div>
+                    <div class="mb-3">
+                        <input type="password" name="password" class="form-control" placeholder="Password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Login</button>
+                </form>
+            </div>
+            <div id="signup-form" class="mt-4">
+                <h2>Sign Up</h2>
+                <form action="/signup" method="post">
+                    <div class="mb-3">
+                        <input type="email" name="email" class="form-control" placeholder="Email" required>
+                    </div>
+                    <div class="mb-3">
+                        <input type="password" name="password" class="form-control" placeholder="Password" required>
+                    </div>
+                    <button type="submit" class="btn btn-secondary">Sign Up</button>
+                </form>
+            </div>
+            <div id="logout-form" class="mt-4" style="display: none;">
+                <form action="/logout" method="post">
+                    <button type="submit" class="btn btn-danger">Logout</button>
+                </form>
+            </div>
+        </div>
+        <div id="chat-section" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <div id="chat-messages" class="mb-4" style="height: 400px; overflow-y: auto;"></div>
+                    <div class="mb-3">
+                        <input type="text" id="user-input" class="form-control" placeholder="Type your message...">
+                    </div>
+                    <div class="mb-3">
+                        <input type="file" id="video-file" accept="video/*" class="form-control">
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <button onclick="sendMessage()" class="btn btn-primary">Send</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
     <script>
+        function checkAuthStatus() {
+            fetch('/auth_status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.authenticated) {
+                        document.getElementById('login-form').style.display = 'none';
+                        document.getElementById('signup-form').style.display = 'none';
+                        document.getElementById('logout-form').style.display = 'block';
+                        document.getElementById('chat-section').style.display = 'block';
+                    } else {
+                        document.getElementById('login-form').style.display = 'block';
+                        document.getElementById('signup-form').style.display = 'block';
+                        document.getElementById('logout-form').style.display = 'none';
+                        document.getElementById('chat-section').style.display = 'none';
+                    }
+                });
+        }
+
         async function sendMessage() {
             const userInput = document.getElementById('user-input');
             const videoFile = document.getElementById('video-file');
@@ -46,6 +97,10 @@
                         method: 'POST',
                         body: formData
                     });
+                    if (response.status === 401) {
+                        checkAuthStatus();
+                        return;
+                    }
                     const data = await response.json();
                     appendMessage('Chatbot', data.response);
                 } catch (error) {
@@ -66,6 +121,9 @@
             chatMessages.appendChild(messageElement);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
+
+        // Check authentication status on page load
+        checkAuthStatus();
     </script>
 </body>
 </html>

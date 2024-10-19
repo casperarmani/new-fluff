@@ -1,11 +1,18 @@
 import os
-from fastapi import FastAPI, File, Form, UploadFile
-from fastapi.responses import HTMLResponse
+import logging
+from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
+from starlette.middleware.sessions import SessionMiddleware
 from chatbot import Chatbot
 from dotenv import load_dotenv
 import uvicorn
+from supabase import create_client, Client
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -19,17 +26,46 @@ os.makedirs(static_dir, exist_ok=True)
 # Mount static files
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+# Add session middleware
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY"))
+
+# Initialize Supabase client
+try:
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_anon_key = os.getenv("SUPABASE_ANON_KEY")
+    
+    if not supabase_url or not supabase_anon_key:
+        raise ValueError("SUPABASE_URL or SUPABASE_ANON_KEY is missing")
+    
+    supabase: Client = create_client(supabase_url, supabase_anon_key)
+    logger.info("Supabase client initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize Supabase client: {str(e)}")
+    supabase = None
+
+def get_current_user(request: Request):
+    session = request.session
+    if "user" not in session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return session["user"]
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     with open("templates/index.html", "r") as f:
         html_content = f.read()
     return HTMLResponse(content=html_content)
 
+@app.get("/auth_status")
+async def auth_status(request: Request):
+    session = request.session
+    return JSONResponse({"authenticated": "user" in session})
+
 @app.post("/send_message")
 async def send_message(
     request: Request,
     message: str = Form(""),
-    video: UploadFile = File(None)
+    video: UploadFile = File(None),
+    user: dict = Depends(get_current_user)
 ):
     if video:
         # Save the uploaded file temporarily
@@ -49,6 +85,35 @@ async def send_message(
         # Handle text-only message
         response = chatbot.send_message(message)
         return {"response": response}
+
+@app.post("/login")
+async def login(request: Request, email: str = Form(...), password: str = Form(...)):
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Supabase client not initialized")
+    try:
+        response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        request.session["user"] = response.user.dict()
+        return RedirectResponse(url="/", status_code=303)
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/signup")
+async def signup(request: Request, email: str = Form(...), password: str = Form(...)):
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Supabase client not initialized")
+    try:
+        response = supabase.auth.sign_up({"email": email, "password": password})
+        request.session["user"] = response.user.dict()
+        return RedirectResponse(url="/", status_code=303)
+    except Exception as e:
+        logger.error(f"Signup error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/logout")
+async def logout(request: Request):
+    request.session.pop("user", None)
+    return RedirectResponse(url="/", status_code=303)
 
 if __name__ == '__main__':
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
