@@ -1,103 +1,113 @@
 import os
-import logging
-import time
-from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException
+from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.requests import Request
+from fastapi.security import OAuth2AuthorizationCodeBearer
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
 from chatbot import Chatbot
+from database import create_user, get_user_by_username, insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history
 from dotenv import load_dotenv
 import uvicorn
 from supabase import create_client, Client
-from datetime import datetime
-import json
-from gotrue.errors import AuthApiError
-from database import create_user, get_user_by_username, insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import uuid
 
 load_dotenv()
 
 app = FastAPI()
 chatbot = Chatbot()
 
+# Create static directory if it doesn't exist
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
 
+# Mount static files
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+# Add session middleware
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY"))
 
-class DateTimeEncoder(json.JSONEncoder):
-    def default(self, o):
-        if isinstance(o, datetime):
-            return o.isoformat()
-        return super().default(o)
-
-def initialize_supabase_client(max_retries=3, retry_delay=5):
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_anon_key = os.getenv("SUPABASE_ANON_KEY")
-    
-    if not supabase_url or not supabase_anon_key:
-        raise ValueError("SUPABASE_URL or SUPABASE_ANON_KEY is missing")
-    
-    for attempt in range(max_retries):
-        try:
-            supabase: Client = create_client(supabase_url, supabase_anon_key)
-            logger.info("Supabase client initialized successfully")
-            return supabase
-        except Exception as e:
-            logger.error(f"Attempt {attempt + 1}/{max_retries} failed to initialize Supabase client: {str(e)}")
-            if attempt < max_retries - 1:
-                logger.info(f"Retrying in {retry_delay} seconds...")
-                time.sleep(retry_delay)
-            else:
-                logger.error("Max retries reached. Failed to initialize Supabase client.")
-                return None
-
-supabase = initialize_supabase_client()
+# Initialize Supabase client
+supabase: Client = create_client(
+    os.environ.get("SUPABASE_URL"),
+    os.environ.get("SUPABASE_ANON_KEY")
+)
 
 def get_current_user(request: Request):
-    session = request.session
-    if "user" not in session:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    user = session["user"]
-    user['id'] = str(user['id'])
+    user = request.session.get('user')
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return user
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
+    user = request.session.get('user')
     with open("templates/index.html", "r") as f:
         html_content = f.read()
+    if user:
+        html_content = html_content.replace("<!-- USER_INFO -->", f"<p>Welcome, {user['email']}! <a href='/logout'>Logout</a></p>")
+    else:
+        html_content = html_content.replace("<!-- USER_INFO -->", "<p><a href='/login'>Login</a> | <a href='/signup'>Sign Up</a></p>")
     return HTMLResponse(content=html_content)
 
-@app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
+@app.get('/login', response_class=HTMLResponse)
+async def login(request: Request):
     with open("templates/login.html", "r") as f:
-        html_content = f.read()
-    return HTMLResponse(content=html_content)
+        return HTMLResponse(content=f.read())
 
-@app.get("/signup", response_class=HTMLResponse)
-async def signup_page(request: Request):
+@app.post('/login')
+async def login_post(request: Request, email: str = Form(...), password: str = Form(...)):
+    try:
+        response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        user = response.user
+        request.session['user'] = {
+            'id': str(user.id),
+            'email': user.email,
+        }
+        return JSONResponse({"success": True, "message": "Login successful"})
+    except Exception as e:
+        return JSONResponse({"success": False, "message": str(e)}, status_code=400)
+
+@app.get('/signup', response_class=HTMLResponse)
+async def signup(request: Request):
     with open("templates/signup.html", "r") as f:
-        html_content = f.read()
-    return HTMLResponse(content=html_content)
+        return HTMLResponse(content=f.read())
 
-@app.get("/auth_status")
-async def auth_status(request: Request):
-    session = request.session
-    return JSONResponse({"authenticated": "user" in session})
+@app.post('/signup')
+async def signup_post(request: Request, email: str = Form(...), password: str = Form(...)):
+    try:
+        response = supabase.auth.sign_up({"email": email, "password": password})
+        user = response.user
+        if user:
+            request.session['user'] = {
+                'id': str(user.id),
+                'email': user.email,
+            }
+            username = email.split('@')[0]
+            await create_user(username)
+            return JSONResponse({"success": True, "message": "Signup successful"})
+        else:
+            return JSONResponse({"success": False, "message": "Signup failed"}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"success": False, "message": str(e)}, status_code=400)
+
+@app.post('/logout')
+async def logout(request: Request):
+    request.session.pop('user', None)
+    return JSONResponse({"success": True, "message": "Logout successful"})
 
 @app.post("/send_message")
 async def send_message(
     request: Request,
     message: str = Form(""),
     video: UploadFile = File(None),
-    user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
-    user_id = user['id']
+    user_id = uuid.UUID(current_user['id'])
     if video:
         video_path = os.path.join('temp', video.filename)
         os.makedirs('temp', exist_ok=True)
@@ -105,83 +115,27 @@ async def send_message(
             buffer.write(await video.read())
         
         analysis_result = chatbot.analyze_video(video_path, message)
-        
         os.remove(video_path)
         
         await insert_video_analysis(user_id, video.filename, analysis_result)
-        
         return {"response": analysis_result}
     else:
         response = chatbot.send_message(message)
-        
         await insert_chat_message(user_id, message, 'text')
         await insert_chat_message(user_id, response, 'bot')
-        
         return {"response": response}
 
 @app.get("/chat_history")
-async def chat_history(request: Request, user: dict = Depends(get_current_user)):
-    user_id = user['id']
+async def chat_history(current_user: dict = Depends(get_current_user)):
+    user_id = uuid.UUID(current_user['id'])
     history = await get_chat_history(user_id)
-    return JSONResponse({"history": history})
+    return {"history": history}
 
 @app.get("/video_analysis_history")
-async def video_analysis_history(request: Request, user: dict = Depends(get_current_user)):
-    user_id = user['id']
+async def video_analysis_history(current_user: dict = Depends(get_current_user)):
+    user_id = uuid.UUID(current_user['id'])
     history = await get_video_analysis_history(user_id)
-    return JSONResponse({"history": history})
-
-@app.post("/login")
-async def login(request: Request, email: str = Form(...), password: str = Form(...)):
-    if not supabase:
-        raise HTTPException(status_code=500, detail="Supabase client not initialized")
-    try:
-        response = supabase.auth.sign_in_with_password({"email": email, "password": password})
-        user_dict = dict(response.user)
-        user_dict = json.loads(json.dumps(user_dict, cls=DateTimeEncoder))
-        user_dict['id'] = str(user_dict['id'])
-        request.session["user"] = user_dict
-        return JSONResponse({"success": True, "message": "Login successful"})
-    except AuthApiError as e:
-        logger.error(f"Login error: {str(e)}")
-        error_message = "Incorrect email or password. Please try again or reset your password if you've forgotten it."
-        return JSONResponse({"success": False, "message": error_message}, status_code=400)
-    except Exception as e:
-        logger.error(f"Login error: {str(e)}")
-        return JSONResponse({"success": False, "message": "An unexpected error occurred during login"}, status_code=500)
-
-@app.post("/signup")
-async def signup(request: Request, email: str = Form(...), password: str = Form(...)):
-    if not supabase:
-        raise HTTPException(status_code=500, detail="Supabase client not initialized")
-    try:
-        response = supabase.auth.sign_up({"email": email, "password": password})
-        user_data = response.user
-        user_dict = {
-            'id': str(user_data.id),
-            'email': user_data.email,
-            'created_at': user_data.created_at.isoformat() if user_data.created_at else None,
-            'updated_at': user_data.updated_at.isoformat() if user_data.updated_at else None
-        }
-        request.session["user"] = user_dict
-        
-        username = email.split('@')[0]
-        created_user = await create_user(username)
-        
-        return JSONResponse({"success": True, "message": "Signup successful"})
-    except AuthApiError as e:
-        logger.error(f"Signup error: {str(e)}")
-        error_message = "An account with this email address already exists. Please use a different email or try logging in."
-        return JSONResponse({"success": False, "message": error_message}, status_code=400)
-    except Exception as e:
-        logger.error(f"Signup error: {str(e)}")
-        error_message = f"An unexpected error occurred during signup: {str(e)}"
-        return JSONResponse({"success": False, "message": error_message}, status_code=500)
-
-@app.post("/logout")
-async def logout(request: Request):
-    request.session.pop("user", None)
-    return JSONResponse({"success": True, "message": "Logout successful"})
+    return {"history": history}
 
 if __name__ == '__main__':
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
