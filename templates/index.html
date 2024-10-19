@@ -57,13 +57,19 @@
                 .then(data => {
                     const chatMessages = document.getElementById('chat-messages');
                     chatMessages.innerHTML = '';
-                    data.forEach(message => {
-                        appendMessage('You', message.message);
-                        appendMessage('Chatbot', message.response);
-                    });
+                    if (Array.isArray(data)) {
+                        data.forEach(message => {
+                            appendMessage('You', message.message);
+                            appendMessage('Chatbot', message.response);
+                        });
+                    } else if (data.error) {
+                        console.error('Error fetching chat history:', data.error);
+                        appendMessage('System', 'Failed to load chat history. Please try again later.');
+                    }
                 })
                 .catch(error => {
                     console.error('Error fetching chat history:', error);
+                    appendMessage('System', 'Failed to load chat history. Please try again later.');
                 });
         }
 
@@ -97,10 +103,14 @@
                         return;
                     }
                     const data = await response.json();
-                    appendMessage('Chatbot', data.response);
+                    if (data.error) {
+                        appendMessage('System', `Error: ${data.error}`);
+                    } else {
+                        appendMessage('Chatbot', data.response);
+                    }
                 } catch (error) {
                     console.error('Error:', error);
-                    appendMessage('Chatbot', 'An error occurred while processing your request.');
+                    appendMessage('System', 'An error occurred while processing your request.');
                 } finally {
                     spinner.classList.add('d-none');
                     sendButton.disabled = false;
