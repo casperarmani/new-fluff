@@ -13,8 +13,3 @@ email-validator
 flask
 flask-sqlalchemy
 psycopg2-binary
-authlib
-databases
-passlib
-python-jose
-sqlalchemy
