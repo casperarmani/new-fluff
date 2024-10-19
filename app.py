@@ -15,7 +15,6 @@ import json
 from gotrue.errors import AuthApiError
 from database import create_user, get_user_by_username, insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -24,17 +23,13 @@ load_dotenv()
 app = FastAPI()
 chatbot = Chatbot()
 
-# Create static directory if it doesn't exist
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
 
-# Mount static files
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# Add session middleware
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY"))
 
-# Custom JSON encoder for datetime objects
 class DateTimeEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, datetime):
@@ -69,7 +64,7 @@ def get_current_user(request: Request):
     if "user" not in session:
         raise HTTPException(status_code=401, detail="Not authenticated")
     user = session["user"]
-    user['id'] = str(user['id'])  # Ensure user_id is stored as a string
+    user['id'] = str(user['id'])
     return user
 
 @app.get("/", response_class=HTMLResponse)
@@ -104,27 +99,21 @@ async def send_message(
 ):
     user_id = user['id']
     if video:
-        # Save the uploaded file temporarily
         video_path = os.path.join('temp', video.filename)
         os.makedirs('temp', exist_ok=True)
         with open(video_path, "wb") as buffer:
             buffer.write(await video.read())
         
-        # Analyze the video
         analysis_result = chatbot.analyze_video(video_path, message)
         
-        # Remove the temporary file
         os.remove(video_path)
         
-        # Store video analysis in the database
         await insert_video_analysis(user_id, video.filename, analysis_result)
         
         return {"response": analysis_result}
     else:
-        # Handle text-only message
         response = chatbot.send_message(message)
         
-        # Store chat message in the database
         await insert_chat_message(user_id, message, 'text')
         await insert_chat_message(user_id, response, 'bot')
         
@@ -149,9 +138,8 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
     try:
         response = supabase.auth.sign_in_with_password({"email": email, "password": password})
         user_dict = dict(response.user)
-        # Convert datetime objects to ISO format strings
         user_dict = json.loads(json.dumps(user_dict, cls=DateTimeEncoder))
-        user_dict['id'] = str(user_dict['id'])  # Ensure user_id is stored as a string
+        user_dict['id'] = str(user_dict['id'])
         request.session["user"] = user_dict
         return JSONResponse({"success": True, "message": "Login successful"})
     except AuthApiError as e:
@@ -177,9 +165,8 @@ async def signup(request: Request, email: str = Form(...), password: str = Form(
         }
         request.session["user"] = user_dict
         
-        # Create a new user in the 'users' table
-        username = email.split('@')[0]  # Use the part before @ as the username
-        created_user = await create_user(user_dict['id'], username)
+        username = email.split('@')[0]
+        created_user = await create_user(username)
         
         return JSONResponse({"success": True, "message": "Signup successful"})
     except AuthApiError as e:

@@ -8,8 +8,8 @@ supabase: Client = create_client(
     os.environ.get("SUPABASE_ANON_KEY")
 )
 
-async def create_user(user_id: str, username: str) -> Dict:
-    response = supabase.table("users").insert({"id": user_id, "username": username}).execute()
+async def create_user(username: str) -> Dict:
+    response = supabase.table("users").insert({"username": username}).execute()
     return response.data[0] if response.data else {}
 
 def get_user_by_username(username: str) -> Dict:
