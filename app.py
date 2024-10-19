@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +12,7 @@ import uvicorn
 from supabase import create_client, Client
 from datetime import datetime
 import json
+from gotrue.errors import AuthApiError
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -38,19 +40,28 @@ class DateTimeEncoder(json.JSONEncoder):
             return o.isoformat()
         return super().default(o)
 
-# Initialize Supabase client
-try:
+def initialize_supabase_client(max_retries=3, retry_delay=5):
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_anon_key = os.getenv("SUPABASE_ANON_KEY")
     
     if not supabase_url or not supabase_anon_key:
         raise ValueError("SUPABASE_URL or SUPABASE_ANON_KEY is missing")
     
-    supabase: Client = create_client(supabase_url, supabase_anon_key)
-    logger.info("Supabase client initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize Supabase client: {str(e)}")
-    supabase = None
+    for attempt in range(max_retries):
+        try:
+            supabase: Client = create_client(supabase_url, supabase_anon_key)
+            logger.info("Supabase client initialized successfully")
+            return supabase
+        except Exception as e:
+            logger.error(f"Attempt {attempt + 1}/{max_retries} failed to initialize Supabase client: {str(e)}")
+            if attempt < max_retries - 1:
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                logger.error("Max retries reached. Failed to initialize Supabase client.")
+                return None
+
+supabase = initialize_supabase_client()
 
 def get_current_user(request: Request):
     session = request.session
@@ -105,10 +116,18 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
         # Convert datetime objects to ISO format strings
         user_dict = json.loads(json.dumps(user_dict, cls=DateTimeEncoder))
         request.session["user"] = user_dict
-        return RedirectResponse(url="/", status_code=303)
+        return JSONResponse({"success": True, "message": "Login successful"})
+    except AuthApiError as e:
+        logger.error(f"Login error: {str(e)}")
+        error_message = "Invalid email or password"
+        if e.status == 400:
+            error_message = "Invalid email format"
+        elif e.status == 429:
+            error_message = "Too many login attempts. Please try again later."
+        return JSONResponse({"success": False, "message": error_message}, status_code=e.status)
     except Exception as e:
         logger.error(f"Login error: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        return JSONResponse({"success": False, "message": "An unexpected error occurred during login"}, status_code=500)
 
 @app.post("/signup")
 async def signup(request: Request, email: str = Form(...), password: str = Form(...)):
@@ -120,15 +139,23 @@ async def signup(request: Request, email: str = Form(...), password: str = Form(
         # Convert datetime objects to ISO format strings
         user_dict = json.loads(json.dumps(user_dict, cls=DateTimeEncoder))
         request.session["user"] = user_dict
-        return RedirectResponse(url="/", status_code=303)
+        return JSONResponse({"success": True, "message": "Signup successful"})
+    except AuthApiError as e:
+        logger.error(f"Signup error: {str(e)}")
+        error_message = "Unable to create account"
+        if e.status == 400:
+            error_message = "Invalid email format or weak password"
+        elif e.status == 429:
+            error_message = "Too many signup attempts. Please try again later."
+        return JSONResponse({"success": False, "message": error_message}, status_code=e.status)
     except Exception as e:
         logger.error(f"Signup error: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        return JSONResponse({"success": False, "message": "An unexpected error occurred during signup"}, status_code=500)
 
 @app.post("/logout")
 async def logout(request: Request):
     request.session.pop("user", None)
-    return RedirectResponse(url="/", status_code=303)
+    return JSONResponse({"success": True, "message": "Logout successful"})
 
 if __name__ == '__main__':
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

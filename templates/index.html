@@ -6,6 +6,11 @@
     <title>Gemini Chatbot with Video Analysis</title>
     <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
     <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .spinner-border {
+            display: none;
+        }
+    </style>
 </head>
 <body>
     <div class="container mt-4">
@@ -13,32 +18,41 @@
         <div id="auth-section" class="mb-4">
             <div id="login-form">
                 <h2>Login</h2>
-                <form action="/login" method="post">
+                <form id="login-form-element">
                     <div class="mb-3">
-                        <input type="email" name="email" class="form-control" placeholder="Email" required>
+                        <input type="email" name="email" class="form-control" placeholder="Email" required pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$">
                     </div>
                     <div class="mb-3">
-                        <input type="password" name="password" class="form-control" placeholder="Password" required>
+                        <input type="password" name="password" class="form-control" placeholder="Password" required minlength="8">
                     </div>
-                    <button type="submit" class="btn btn-primary">Login</button>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        Login
+                    </button>
                 </form>
+                <div id="login-error" class="text-danger mt-2"></div>
             </div>
             <div id="signup-form" class="mt-4">
                 <h2>Sign Up</h2>
-                <form action="/signup" method="post">
+                <form id="signup-form-element">
                     <div class="mb-3">
-                        <input type="email" name="email" class="form-control" placeholder="Email" required>
+                        <input type="email" name="email" class="form-control" placeholder="Email" required pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$">
                     </div>
                     <div class="mb-3">
-                        <input type="password" name="password" class="form-control" placeholder="Password" required>
+                        <input type="password" name="password" class="form-control" placeholder="Password" required minlength="8">
                     </div>
-                    <button type="submit" class="btn btn-secondary">Sign Up</button>
+                    <button type="submit" class="btn btn-secondary">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        Sign Up
+                    </button>
                 </form>
+                <div id="signup-error" class="text-danger mt-2"></div>
             </div>
             <div id="logout-form" class="mt-4" style="display: none;">
-                <form action="/logout" method="post">
-                    <button type="submit" class="btn btn-danger">Logout</button>
-                </form>
+                <button id="logout-button" class="btn btn-danger">
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    Logout
+                </button>
             </div>
         </div>
         <div id="chat-section" style="display: none;">
@@ -52,13 +66,28 @@
                         <input type="file" id="video-file" accept="video/*" class="form-control">
                     </div>
                     <div class="d-flex justify-content-end">
-                        <button onclick="sendMessage()" class="btn btn-primary">Send</button>
+                        <button id="send-button" class="btn btn-primary">
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            Send
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
     <script>
+        function showSpinner(button) {
+            const spinner = button.querySelector('.spinner-border');
+            spinner.style.display = 'inline-block';
+            button.disabled = true;
+        }
+
+        function hideSpinner(button) {
+            const spinner = button.querySelector('.spinner-border');
+            spinner.style.display = 'none';
+            button.disabled = false;
+        }
+
         function checkAuthStatus() {
             fetch('/auth_status')
                 .then(response => response.json())
@@ -68,6 +97,7 @@
                         document.getElementById('signup-form').style.display = 'none';
                         document.getElementById('logout-form').style.display = 'block';
                         document.getElementById('chat-section').style.display = 'block';
+                        lazyLoadChatInterface();
                     } else {
                         document.getElementById('login-form').style.display = 'block';
                         document.getElementById('signup-form').style.display = 'block';
@@ -77,7 +107,23 @@
                 });
         }
 
+        function lazyLoadChatInterface() {
+            const chatMessages = document.getElementById('chat-messages');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        // Load more messages here if needed
+                        console.log('Chat interface visible, loading more messages if needed');
+                    }
+                });
+            });
+            observer.observe(chatMessages);
+        }
+
         async function sendMessage() {
+            const sendButton = document.getElementById('send-button');
+            showSpinner(sendButton);
+
             const userInput = document.getElementById('user-input');
             const videoFile = document.getElementById('video-file');
             const message = userInput.value.trim();
@@ -106,10 +152,14 @@
                 } catch (error) {
                     console.error('Error:', error);
                     appendMessage('Chatbot', 'An error occurred while processing your request.');
+                } finally {
+                    hideSpinner(sendButton);
                 }
 
                 userInput.value = '';
                 videoFile.value = '';
+            } else {
+                hideSpinner(sendButton);
             }
         }
 
@@ -121,6 +171,75 @@
             chatMessages.appendChild(messageElement);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
+
+        document.getElementById('login-form-element').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const submitButton = this.querySelector('button[type="submit"]');
+            showSpinner(submitButton);
+
+            const formData = new FormData(this);
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    checkAuthStatus();
+                } else {
+                    document.getElementById('login-error').textContent = data.message;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('login-error').textContent = 'An error occurred during login.';
+            } finally {
+                hideSpinner(submitButton);
+            }
+        });
+
+        document.getElementById('signup-form-element').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const submitButton = this.querySelector('button[type="submit"]');
+            showSpinner(submitButton);
+
+            const formData = new FormData(this);
+            try {
+                const response = await fetch('/signup', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    checkAuthStatus();
+                } else {
+                    document.getElementById('signup-error').textContent = data.message;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('signup-error').textContent = 'An error occurred during signup.';
+            } finally {
+                hideSpinner(submitButton);
+            }
+        });
+
+        document.getElementById('logout-button').addEventListener('click', async function() {
+            showSpinner(this);
+            try {
+                const response = await fetch('/logout', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    checkAuthStatus();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            } finally {
+                hideSpinner(this);
+            }
+        });
+
+        document.getElementById('send-button').addEventListener('click', sendMessage);
 
         // Check authentication status on page load
         checkAuthStatus();
