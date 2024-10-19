@@ -112,11 +112,32 @@ async def send_message(
         # Remove the temporary file
         os.remove(video_path)
         
-        return {"response": analysis_result}
+        response = analysis_result
     else:
         # Handle text-only message
         response = chatbot.send_message(message)
-        return {"response": response}
+
+    # Store the chat message in Supabase
+    try:
+        supabase.table("chat_history").insert({
+            "user_id": user["id"],
+            "message": message,
+            "response": response,
+            "timestamp": datetime.utcnow().isoformat()
+        }).execute()
+    except Exception as e:
+        logger.error(f"Error storing chat message: {str(e)}")
+
+    return {"response": response}
+
+@app.get("/chat_history")
+async def get_chat_history(user: dict = Depends(get_current_user)):
+    try:
+        response = supabase.table("chat_history").select("*").eq("user_id", user["id"]).order("timestamp").execute()
+        return JSONResponse(response.data)
+    except Exception as e:
+        logger.error(f"Error fetching chat history: {str(e)}")
+        return JSONResponse({"error": "Failed to fetch chat history"}, status_code=500)
 
 @app.post("/login")
 async def login(request: Request, email: str = Form(...), password: str = Form(...)):
