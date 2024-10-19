@@ -12,10 +12,10 @@
         <h1 class="mb-4">Sign Up</h1>
         <form id="signup-form">
             <div class="mb-3">
-                <input type="email" name="email" class="form-control" placeholder="Email" required pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$">
+                <input type="email" name="email" class="form-control" placeholder="Email" required>
             </div>
             <div class="mb-3">
-                <input type="password" name="password" class="form-control" placeholder="Password" required minlength="8">
+                <input type="password" name="password" class="form-control" placeholder="Password" required>
             </div>
             <button type="submit" class="btn btn-primary">
                 <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
@@ -47,7 +47,7 @@
                 }
             } catch (error) {
                 console.error('Error:', error);
-                document.getElementById('signup-error').textContent = 'An error occurred during signup.';
+                document.getElementById('signup-error').textContent = 'An error occurred during sign up.';
             } finally {
                 spinner.classList.add('d-none');
                 submitButton.disabled = false;
