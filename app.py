@@ -63,30 +63,6 @@ def initialize_supabase_client(max_retries=3, retry_delay=5):
 
 supabase = initialize_supabase_client()
 
-async def create_chat_history_table():
-    try:
-        # SQL query to create the table if it doesn't exist
-        create_table_query = """
-        CREATE TABLE IF NOT EXISTS chat_history (
-            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-            user_id UUID NOT NULL,
-            message TEXT NOT NULL,
-            response TEXT NOT NULL,
-            timestamp TIMESTAMPTZ DEFAULT NOW()
-        );
-        """
-        
-        # Execute the SQL query directly using Supabase's SQL method
-        result = supabase.sql(create_table_query).execute()
-        logger.info("chat_history table created or already exists")
-    except Exception as e:
-        logger.error(f"Error creating chat_history table: {str(e)}")
-        raise
-
-@app.on_event("startup")
-async def startup_event():
-    await create_chat_history_table()
-
 def get_current_user(request: Request):
     session = request.session
     if "user" not in session:
@@ -136,33 +112,11 @@ async def send_message(
         # Remove the temporary file
         os.remove(video_path)
         
-        response = analysis_result
+        return {"response": analysis_result}
     else:
         # Handle text-only message
         response = chatbot.send_message(message)
-
-    # Store the chat message in Supabase
-    try:
-        supabase.table("chat_history").insert({
-            "user_id": user["id"],
-            "message": message,
-            "response": response,
-            "timestamp": datetime.utcnow().isoformat()
-        }).execute()
-    except Exception as e:
-        logger.error(f"Error storing chat message: {str(e)}")
-        return JSONResponse({"error": f"Failed to store chat message: {str(e)}"}, status_code=500)
-
-    return {"response": response}
-
-@app.get("/chat_history")
-async def get_chat_history(user: dict = Depends(get_current_user)):
-    try:
-        response = supabase.table("chat_history").select("*").eq("user_id", user["id"]).order("timestamp").execute()
-        return JSONResponse(response.data)
-    except Exception as e:
-        logger.error(f"Error fetching chat history: {str(e)}")
-        return JSONResponse({"error": f"Failed to fetch chat history: {str(e)}"}, status_code=500)
+        return {"response": response}
 
 @app.post("/login")
 async def login(request: Request, email: str = Form(...), password: str = Form(...)):
