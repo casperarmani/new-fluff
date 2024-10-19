@@ -10,22 +10,148 @@
 <body>
     <div class="container mt-4">
         <h1 class="mb-4">Gemini Chatbot with Video Analysis</h1>
-        <div class="card">
-            <div class="card-body">
-                <div id="chat-messages" class="mb-4" style="height: 400px; overflow-y: auto;"></div>
-                <div class="mb-3">
-                    <input type="text" id="user-input" class="form-control" placeholder="Type your message...">
+        <div id="auth-container" class="mb-4">
+            <div id="login-form">
+                <h2>Login</h2>
+                <form onsubmit="login(event)">
+                    <div class="mb-3">
+                        <input type="text" id="login-username" class="form-control" placeholder="Username" required>
+                    </div>
+                    <div class="mb-3">
+                        <input type="password" id="login-password" class="form-control" placeholder="Password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Login</button>
+                </form>
+                <p class="mt-2">Don't have an account? <a href="#" onclick="showRegistration()">Register</a></p>
+            </div>
+            <div id="register-form" style="display: none;">
+                <h2>Register</h2>
+                <form onsubmit="register(event)">
+                    <div class="mb-3">
+                        <input type="text" id="register-username" class="form-control" placeholder="Username" required>
+                    </div>
+                    <div class="mb-3">
+                        <input type="email" id="register-email" class="form-control" placeholder="Email" required>
+                    </div>
+                    <div class="mb-3">
+                        <input type="password" id="register-password" class="form-control" placeholder="Password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Register</button>
+                </form>
+                <p class="mt-2">Already have an account? <a href="#" onclick="showLogin()">Login</a></p>
+            </div>
+        </div>
+        <div id="chat-container" style="display: none;">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title">Profile</h5>
+                            <p class="card-text">Welcome, <span id="username-display"></span>!</p>
+                            <button onclick="logout()" class="btn btn-secondary">Logout</button>
+                        </div>
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <input type="file" id="video-file" accept="video/*" class="form-control">
-                </div>
-                <div class="d-flex justify-content-end">
-                    <button onclick="sendMessage()" class="btn btn-primary">Send</button>
+                <div class="col-md-9">
+                    <div class="card">
+                        <div class="card-body">
+                            <div id="chat-messages" class="mb-4" style="height: 400px; overflow-y: auto;"></div>
+                            <div class="mb-3">
+                                <input type="text" id="user-input" class="form-control" placeholder="Type your message...">
+                            </div>
+                            <div class="mb-3">
+                                <input type="file" id="video-file" accept="video/*" class="form-control">
+                            </div>
+                            <div class="d-flex justify-content-end">
+                                <button onclick="sendMessage()" class="btn btn-primary">Send</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
     <script>
+        let accessToken = null;
+        let currentUsername = null;
+
+        function showRegistration() {
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('register-form').style.display = 'block';
+        }
+
+        function showLogin() {
+            document.getElementById('login-form').style.display = 'block';
+            document.getElementById('register-form').style.display = 'none';
+        }
+
+        async function login(event) {
+            event.preventDefault();
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const response = await fetch('/token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    accessToken = data.access_token;
+                    currentUsername = username;
+                    document.getElementById('auth-container').style.display = 'none';
+                    document.getElementById('chat-container').style.display = 'block';
+                    document.getElementById('username-display').textContent = currentUsername;
+                } else {
+                    alert('Login failed. Please check your credentials.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred during login.');
+            }
+        }
+
+        async function register(event) {
+            event.preventDefault();
+            const username = document.getElementById('register-username').value;
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, email, password })
+                });
+
+                if (response.ok) {
+                    alert('Registration successful. Please login.');
+                    showLogin();
+                } else {
+                    alert('Registration failed. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred during registration.');
+            }
+        }
+
+        async function logout() {
+            accessToken = null;
+            currentUsername = null;
+            document.getElementById('auth-container').style.display = 'block';
+            document.getElementById('chat-container').style.display = 'none';
+            document.getElementById('chat-messages').innerHTML = '';
+            document.getElementById('user-input').value = '';
+            document.getElementById('video-file').value = '';
+        }
+
         async function sendMessage() {
             const userInput = document.getElementById('user-input');
             const videoFile = document.getElementById('video-file');
@@ -44,8 +170,16 @@
                 try {
                     const response = await fetch('/send_message', {
                         method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`
+                        },
                         body: formData
                     });
+                    if (response.status === 401) {
+                        alert('Your session has expired. Please login again.');
+                        logout();
+                        return;
+                    }
                     const data = await response.json();
                     appendMessage('Chatbot', data.response);
                 } catch (error) {
