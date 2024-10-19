@@ -1,0 +1,11 @@
+fastapi==0.68.0
+uvicorn==0.15.0
+python-multipart==0.0.5
+google-generativeai==0.8.3
+python-dotenv==1.0.0
+Pillow==9.5.0
+requests==2.31.0
+aiofiles==0.8.0
+authlib==1.2.0
+itsdangerous==2.1.2
+httpx==0.24.1
