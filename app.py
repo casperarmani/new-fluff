@@ -168,15 +168,18 @@ async def signup(request: Request, email: str = Form(...), password: str = Form(
         raise HTTPException(status_code=500, detail="Supabase client not initialized")
     try:
         response = supabase.auth.sign_up({"email": email, "password": password})
-        user_dict = dict(response.user)
-        # Convert datetime objects to ISO format strings
-        user_dict = json.loads(json.dumps(user_dict, cls=DateTimeEncoder))
-        user_dict['id'] = str(user_dict['id'])  # Ensure user_id is stored as a string
+        user_data = response.user
+        user_dict = {
+            'id': str(user_data.id),
+            'email': user_data.email,
+            'created_at': user_data.created_at.isoformat() if user_data.created_at else None,
+            'updated_at': user_data.updated_at.isoformat() if user_data.updated_at else None
+        }
         request.session["user"] = user_dict
         
         # Create a new user in the 'users' table
         username = email.split('@')[0]  # Use the part before @ as the username
-        created_user = create_user(username)
+        created_user = await create_user(user_dict['id'], username)
         
         return JSONResponse({"success": True, "message": "Signup successful"})
     except AuthApiError as e:
@@ -185,7 +188,8 @@ async def signup(request: Request, email: str = Form(...), password: str = Form(
         return JSONResponse({"success": False, "message": error_message}, status_code=400)
     except Exception as e:
         logger.error(f"Signup error: {str(e)}")
-        return JSONResponse({"success": False, "message": "An unexpected error occurred during signup"}, status_code=500)
+        error_message = f"An unexpected error occurred during signup: {str(e)}"
+        return JSONResponse({"success": False, "message": error_message}, status_code=500)
 
 @app.post("/logout")
 async def logout(request: Request):
