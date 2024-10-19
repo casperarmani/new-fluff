@@ -13,7 +13,6 @@ from supabase import create_client, Client
 from datetime import datetime
 import json
 from gotrue.errors import AuthApiError
-import uuid
 from database import create_user, get_user_by_username, insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history
 
 # Set up logging
@@ -69,7 +68,9 @@ def get_current_user(request: Request):
     session = request.session
     if "user" not in session:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    return session["user"]
+    user = session["user"]
+    user['id'] = str(user['id'])  # Ensure user_id is stored as a string
+    return user
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -101,7 +102,7 @@ async def send_message(
     video: UploadFile = File(None),
     user: dict = Depends(get_current_user)
 ):
-    user_id = uuid.UUID(user['id'])
+    user_id = user['id']
     if video:
         # Save the uploaded file temporarily
         video_path = os.path.join('temp', video.filename)
@@ -131,13 +132,13 @@ async def send_message(
 
 @app.get("/chat_history")
 async def chat_history(request: Request, user: dict = Depends(get_current_user)):
-    user_id = uuid.UUID(user['id'])
+    user_id = user['id']
     history = await get_chat_history(user_id)
     return JSONResponse({"history": history})
 
 @app.get("/video_analysis_history")
 async def video_analysis_history(request: Request, user: dict = Depends(get_current_user)):
-    user_id = uuid.UUID(user['id'])
+    user_id = user['id']
     history = await get_video_analysis_history(user_id)
     return JSONResponse({"history": history})
 
@@ -147,9 +148,10 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
         raise HTTPException(status_code=500, detail="Supabase client not initialized")
     try:
         response = supabase.auth.sign_in_with_password({"email": email, "password": password})
-        user_dict = response.user.model_dump()
+        user_dict = dict(response.user)
         # Convert datetime objects to ISO format strings
         user_dict = json.loads(json.dumps(user_dict, cls=DateTimeEncoder))
+        user_dict['id'] = str(user_dict['id'])  # Ensure user_id is stored as a string
         request.session["user"] = user_dict
         return JSONResponse({"success": True, "message": "Login successful"})
     except AuthApiError as e:
@@ -166,9 +168,10 @@ async def signup(request: Request, email: str = Form(...), password: str = Form(
         raise HTTPException(status_code=500, detail="Supabase client not initialized")
     try:
         response = supabase.auth.sign_up({"email": email, "password": password})
-        user_dict = response.user.model_dump()
+        user_dict = dict(response.user)
         # Convert datetime objects to ISO format strings
         user_dict = json.loads(json.dumps(user_dict, cls=DateTimeEncoder))
+        user_dict['id'] = str(user_dict['id'])  # Ensure user_id is stored as a string
         request.session["user"] = user_dict
         
         # Create a new user in the 'users' table
