@@ -6,54 +6,15 @@
     <title>Gemini Chatbot with Video Analysis</title>
     <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
     <link rel="stylesheet" href="/static/styles.css">
-    <style>
-        .spinner-border {
-            display: none;
-        }
-    </style>
 </head>
 <body>
     <div class="container mt-4">
         <h1 class="mb-4">Gemini Chatbot with Video Analysis</h1>
         <div id="auth-section" class="mb-4">
-            <div id="login-form">
-                <h2>Login</h2>
-                <form id="login-form-element">
-                    <div class="mb-3">
-                        <input type="email" name="email" class="form-control" placeholder="Email" required pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$">
-                    </div>
-                    <div class="mb-3">
-                        <input type="password" name="password" class="form-control" placeholder="Password" required minlength="8">
-                    </div>
-                    <button type="submit" class="btn btn-primary">
-                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                        Login
-                    </button>
-                </form>
-                <div id="login-error" class="text-danger mt-2"></div>
-            </div>
-            <div id="signup-form" class="mt-4">
-                <h2>Sign Up</h2>
-                <form id="signup-form-element">
-                    <div class="mb-3">
-                        <input type="email" name="email" class="form-control" placeholder="Email" required pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$">
-                    </div>
-                    <div class="mb-3">
-                        <input type="password" name="password" class="form-control" placeholder="Password" required minlength="8">
-                    </div>
-                    <button type="submit" class="btn btn-secondary">
-                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                        Sign Up
-                    </button>
-                </form>
-                <div id="signup-error" class="text-danger mt-2"></div>
-            </div>
-            <div id="logout-form" class="mt-4" style="display: none;">
-                <button id="logout-button" class="btn btn-danger">
-                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                    Logout
-                </button>
-            </div>
+            <button id="logout-button" class="btn btn-danger" style="display: none;">
+                <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                Logout
+            </button>
         </div>
         <div id="chat-section" style="display: none;">
             <div class="card">
@@ -67,7 +28,7 @@
                     </div>
                     <div class="d-flex justify-content-end">
                         <button id="send-button" class="btn btn-primary">
-                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                             Send
                         </button>
                     </div>
@@ -76,53 +37,24 @@
         </div>
     </div>
     <script>
-        function showSpinner(button) {
-            const spinner = button.querySelector('.spinner-border');
-            spinner.style.display = 'inline-block';
-            button.disabled = true;
-        }
-
-        function hideSpinner(button) {
-            const spinner = button.querySelector('.spinner-border');
-            spinner.style.display = 'none';
-            button.disabled = false;
-        }
-
         function checkAuthStatus() {
             fetch('/auth_status')
                 .then(response => response.json())
                 .then(data => {
                     if (data.authenticated) {
-                        document.getElementById('login-form').style.display = 'none';
-                        document.getElementById('signup-form').style.display = 'none';
-                        document.getElementById('logout-form').style.display = 'block';
+                        document.getElementById('logout-button').style.display = 'block';
                         document.getElementById('chat-section').style.display = 'block';
-                        lazyLoadChatInterface();
                     } else {
-                        document.getElementById('login-form').style.display = 'block';
-                        document.getElementById('signup-form').style.display = 'block';
-                        document.getElementById('logout-form').style.display = 'none';
-                        document.getElementById('chat-section').style.display = 'none';
+                        window.location.href = '/login';
                     }
                 });
-        }
-
-        function lazyLoadChatInterface() {
-            const chatMessages = document.getElementById('chat-messages');
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        // Load more messages here if needed
-                        console.log('Chat interface visible, loading more messages if needed');
-                    }
-                });
-            });
-            observer.observe(chatMessages);
         }
 
         async function sendMessage() {
             const sendButton = document.getElementById('send-button');
-            showSpinner(sendButton);
+            const spinner = sendButton.querySelector('.spinner-border');
+            spinner.classList.remove('d-none');
+            sendButton.disabled = true;
 
             const userInput = document.getElementById('user-input');
             const videoFile = document.getElementById('video-file');
@@ -144,7 +76,7 @@
                         body: formData
                     });
                     if (response.status === 401) {
-                        checkAuthStatus();
+                        window.location.href = '/login';
                         return;
                     }
                     const data = await response.json();
@@ -153,13 +85,15 @@
                     console.error('Error:', error);
                     appendMessage('Chatbot', 'An error occurred while processing your request.');
                 } finally {
-                    hideSpinner(sendButton);
+                    spinner.classList.add('d-none');
+                    sendButton.disabled = false;
                 }
 
                 userInput.value = '';
                 videoFile.value = '';
             } else {
-                hideSpinner(sendButton);
+                spinner.classList.add('d-none');
+                sendButton.disabled = false;
             }
         }
 
@@ -172,70 +106,24 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        document.getElementById('login-form-element').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const submitButton = this.querySelector('button[type="submit"]');
-            showSpinner(submitButton);
-
-            const formData = new FormData(this);
-            try {
-                const response = await fetch('/login', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                if (data.success) {
-                    checkAuthStatus();
-                } else {
-                    document.getElementById('login-error').textContent = data.message;
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                document.getElementById('login-error').textContent = 'An error occurred during login.';
-            } finally {
-                hideSpinner(submitButton);
-            }
-        });
-
-        document.getElementById('signup-form-element').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const submitButton = this.querySelector('button[type="submit"]');
-            showSpinner(submitButton);
-
-            const formData = new FormData(this);
-            try {
-                const response = await fetch('/signup', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                if (data.success) {
-                    checkAuthStatus();
-                } else {
-                    document.getElementById('signup-error').textContent = data.message;
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                document.getElementById('signup-error').textContent = 'An error occurred during signup.';
-            } finally {
-                hideSpinner(submitButton);
-            }
-        });
-
         document.getElementById('logout-button').addEventListener('click', async function() {
-            showSpinner(this);
+            const spinner = this.querySelector('.spinner-border');
+            spinner.classList.remove('d-none');
+            this.disabled = true;
+
             try {
                 const response = await fetch('/logout', {
                     method: 'POST'
                 });
                 const data = await response.json();
                 if (data.success) {
-                    checkAuthStatus();
+                    window.location.href = '/login';
                 }
             } catch (error) {
                 console.error('Error:', error);
             } finally {
-                hideSpinner(this);
+                spinner.classList.add('d-none');
+                this.disabled = false;
             }
         });
 

@@ -75,6 +75,18 @@ async def index(request: Request):
         html_content = f.read()
     return HTMLResponse(content=html_content)
 
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    with open("templates/login.html", "r") as f:
+        html_content = f.read()
+    return HTMLResponse(content=html_content)
+
+@app.get("/signup", response_class=HTMLResponse)
+async def signup_page(request: Request):
+    with open("templates/signup.html", "r") as f:
+        html_content = f.read()
+    return HTMLResponse(content=html_content)
+
 @app.get("/auth_status")
 async def auth_status(request: Request):
     session = request.session
