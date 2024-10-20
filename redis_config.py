@@ -100,3 +100,32 @@ def get_cached_user(email: str) -> Optional[Dict]:
     except Exception as e:
         logger.error(f"Error getting cached user data: {str(e)}")
     return None
+
+def cache_video_analysis(user_id: str, analysis_data: List[Dict]):
+    redis_client = get_redis_client()
+    start_time = time.time()
+    try:
+        key = f"video_analysis:{user_id}"
+        redis_client.setex(key, 3600, json.dumps(analysis_data))  # Cache video analysis for 1 hour
+        end_time = time.time()
+        logger.info(f"Redis cache_video_analysis time: {end_time - start_time:.2f} seconds")
+    except redis.exceptions.ConnectionError:
+        logger.error("Failed to cache video analysis in Redis due to connection error")
+    except Exception as e:
+        logger.error(f"Error caching video analysis: {str(e)}")
+
+def get_cached_video_analysis(user_id: str) -> Optional[List[Dict]]:
+    redis_client = get_redis_client()
+    start_time = time.time()
+    try:
+        key = f"video_analysis:{user_id}"
+        cached_analysis = redis_client.get(key)
+        end_time = time.time()
+        logger.info(f"Redis get_cached_video_analysis time: {end_time - start_time:.2f} seconds")
+        if cached_analysis:
+            return json.loads(cached_analysis.decode('utf-8'))
+    except redis.exceptions.ConnectionError:
+        logger.error("Failed to get cached video analysis from Redis due to connection error")
+    except Exception as e:
+        logger.error(f"Error getting cached video analysis: {str(e)}")
+    return None

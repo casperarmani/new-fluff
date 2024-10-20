@@ -13,7 +13,7 @@ import uvicorn
 from supabase.client import create_client, Client
 import uuid
 import json
-from redis_config import get_redis_client, test_redis_connection, get_session_history, update_chat_history, clear_chat_history, cache_user, get_cached_user
+from redis_config import get_redis_client, test_redis_connection, get_session_history, update_chat_history, clear_chat_history, cache_user, get_cached_user, cache_video_analysis, get_cached_video_analysis
 import redis
 import logging
 
@@ -179,6 +179,7 @@ async def send_message(
         os.remove(video_path)
         
         insert_video_analysis(user_id, video.filename, analysis_result)
+        cache_video_analysis(str(user_id), [{"filename": video.filename, "analysis": analysis_result}])
         response = analysis_result
     else:
         response = chatbot.send_message(message, session_history)
@@ -214,8 +215,14 @@ async def video_analysis_history(request: Request):
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     
-    history = get_video_analysis_history(user_id)
-    logger.info(f"Retrieved video analysis history for user {user_id}")
+    cached_history = get_cached_video_analysis(str(user_id))
+    if cached_history:
+        history = cached_history
+        logger.info(f"Retrieved video analysis history for user {user_id} from cache")
+    else:
+        history = get_video_analysis_history(user_id)
+        cache_video_analysis(str(user_id), history)
+        logger.info(f"Retrieved video analysis history for user {user_id} from database and cached it")
     
     end_time = time.time()
     logger.info(f"Total video analysis history processing time: {end_time - start_time:.2f} seconds")
