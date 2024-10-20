@@ -2,8 +2,8 @@ import os
 import redis
 import json
 import logging
-from typing import List, Dict
 import time
+from typing import List, Dict, Optional
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -29,7 +29,8 @@ def get_session_history(user_id: str, limit: int = 10) -> List[Dict]:
     redis_client = get_redis_client()
     start_time = time.time()
     try:
-        cached_history = redis_client.lrange(f"chat_history:{user_id}", 0, limit - 1)
+        key = f"chat_history:{user_id}"
+        cached_history = redis_client.lrange(key, 0, limit - 1)
         if cached_history:
             history = [json.loads(message.decode('utf-8')) for message in cached_history]
             logger.info(f"Retrieved chat history for user {user_id} from Redis cache")
@@ -70,3 +71,32 @@ def clear_chat_history(user_id: str):
         logger.error("Failed to clear chat history in Redis cache due to connection error")
     except Exception as e:
         logger.error(f"Error clearing chat history: {str(e)}")
+
+def cache_user(email: str, user_data: Dict):
+    redis_client = get_redis_client()
+    start_time = time.time()
+    try:
+        key = f"user:{email}"
+        redis_client.setex(key, 3600, json.dumps(user_data))  # Cache user data for 1 hour
+        end_time = time.time()
+        logger.info(f"Redis cache_user time: {end_time - start_time:.2f} seconds")
+    except redis.exceptions.ConnectionError:
+        logger.error("Failed to cache user data in Redis due to connection error")
+    except Exception as e:
+        logger.error(f"Error caching user data: {str(e)}")
+
+def get_cached_user(email: str) -> Optional[Dict]:
+    redis_client = get_redis_client()
+    start_time = time.time()
+    try:
+        key = f"user:{email}"
+        cached_user = redis_client.get(key)
+        end_time = time.time()
+        logger.info(f"Redis get_cached_user time: {end_time - start_time:.2f} seconds")
+        if cached_user:
+            return json.loads(cached_user.decode('utf-8'))
+    except redis.exceptions.ConnectionError:
+        logger.error("Failed to get cached user data from Redis due to connection error")
+    except Exception as e:
+        logger.error(f"Error getting cached user data: {str(e)}")
+    return None

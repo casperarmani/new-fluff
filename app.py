@@ -13,7 +13,7 @@ import uvicorn
 from supabase.client import create_client, Client
 import uuid
 import json
-from redis_config import get_redis_client, test_redis_connection, get_session_history, update_chat_history, clear_chat_history
+from redis_config import get_redis_client, test_redis_connection, get_session_history, update_chat_history, clear_chat_history, cache_user, get_cached_user
 import redis
 import logging
 
@@ -80,14 +80,25 @@ async def login_page(request: Request):
 @app.post('/login')
 async def login_post(request: Request, email: str = Form(...), password: str = Form(...)):
     try:
+        start_time = time.time()
         response = supabase.auth.sign_in_with_password({"email": email, "password": password})
         user = response.user
         if user and user.email:
-            db_user = get_user_by_email(user.email)
+            cached_user = get_cached_user(user.email)
+            if cached_user:
+                db_user = cached_user
+                logger.info(f"User {user.email} retrieved from cache")
+            else:
+                db_user = get_user_by_email(user.email)
+                cache_user(user.email, db_user)
+                logger.info(f"User {user.email} cached")
+            
             request.session['user'] = {
                 'id': str(db_user['id']),
                 'email': user.email,
             }
+            end_time = time.time()
+            logger.info(f"Login process time: {end_time - start_time:.2f} seconds")
             return JSONResponse({
                 "success": True,
                 "message": "Login successful",
@@ -99,6 +110,7 @@ async def login_post(request: Request, email: str = Form(...), password: str = F
         else:
             raise ValueError("Invalid user data received from Supabase")
     except Exception as e:
+        logger.error(f"Login error: {str(e)}")
         return JSONResponse({"success": False, "message": str(e)}, status_code=400)
 
 @app.get('/signup', response_class=HTMLResponse)
@@ -109,24 +121,31 @@ async def signup_page(request: Request):
 @app.post('/signup')
 async def signup_post(request: Request, email: str = Form(...), password: str = Form(...)):
     try:
+        start_time = time.time()
         response = supabase.auth.sign_up({"email": email, "password": password})
         user = response.user
         if user and user.email:
             db_user = create_user(user.email)
+            cache_user(user.email, db_user)
             request.session['user'] = {
                 'id': str(db_user['id']),
                 'email': user.email,
             }
+            end_time = time.time()
+            logger.info(f"Signup process time: {end_time - start_time:.2f} seconds")
             return JSONResponse({"success": True, "message": "Signup successful"})
         else:
             return JSONResponse({"success": False, "message": "Signup failed"}, status_code=400)
     except Exception as e:
+        logger.error(f"Signup error: {str(e)}")
         return JSONResponse({"success": False, "message": str(e)}, status_code=400)
 
 @app.post('/logout')
 async def logout(request: Request):
+    user_id = request.session.get('user', {}).get('id')
     request.session.pop('user', None)
-    clear_chat_history(request.session.get('user', {}).get('id'))
+    if user_id:
+        clear_chat_history(user_id)
     return JSONResponse({"success": True, "message": "Logout successful"})
 
 @app.get("/auth_status")
