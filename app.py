@@ -19,24 +19,19 @@ import logging
 
 load_dotenv()
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
 chatbot = Chatbot()
 
-# Create static directory if it doesn't exist
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
 
-# Mount static files
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# Add session middleware
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY"))
 
-# Initialize Supabase client
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_ANON_KEY")
 
@@ -45,7 +40,6 @@ if not supabase_url or not supabase_key:
 
 supabase: Client = create_client(supabase_url, supabase_key)
 
-# Initialize Redis client
 try:
     redis_client = get_redis_client()
     logger.info("Redis client initialized successfully" if redis_client else "Failed to initialize Redis client")
@@ -184,18 +178,12 @@ async def chat_history(request: Request):
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     
-    try:
-        history = get_session_history(str(user_id))
-        if not history:
-            # Fallback to database if Redis is empty or unavailable
-            history = db_get_chat_history(user_id)
-            # Update Redis cache with the database results
-            for item in reversed(history):
-                update_chat_history(str(user_id), item)
-        logger.info(f"Retrieved chat history for user {user_id}")
-    except Exception as e:
-        logger.error(f"Error retrieving chat history: {str(e)}")
+    history = get_session_history(str(user_id))
+    if not history:
         history = db_get_chat_history(user_id)
+        for item in reversed(history):
+            update_chat_history(str(user_id), item)
+    logger.info(f"Retrieved chat history for user {user_id}")
     
     end_time = time.time()
     logger.info(f"Total chat history processing time: {end_time - start_time:.2f} seconds")

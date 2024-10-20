@@ -1,0 +1,75 @@
+INFO:uvicorn.error:Application startup complete.
+INFO:     172.31.196.76:47018 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.76:47018 - "GET /static/styles.css HTTP/1.1" 200 OK
+INFO:     172.31.196.76:47018 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:     172.31.196.76:47018 - "GET /login HTTP/1.1" 200 OK
+INFO:     172.31.196.76:47018 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.76:47018 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=50 "HTTP/1.1 200 OK"
+INFO:app:Retrieved chat history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:app:Total chat history processing time: 68.03 seconds
+INFO:     172.31.196.76:47018 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=10 "HTTP/1.1 200 OK"
+INFO:app:Retrieved video analysis history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:app:Total video analysis history processing time: 1.13 seconds
+INFO:     172.31.196.76:47034 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:     172.31.196.76:56162 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.76:56162 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:app:Retrieved chat history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:app:Total chat history processing time: 1.05 seconds
+INFO:     172.31.196.76:56162 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=10 "HTTP/1.1 200 OK"
+INFO:app:Retrieved video analysis history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:app:Total video analysis history processing time: 0.81 seconds
+INFO:     172.31.196.76:36444 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:chatbot:Session history processing time: 31.50 seconds
+INFO:chatbot:Gemini API call time: 1.53 seconds
+INFO:chatbot:Total message processing time: 33.04 seconds
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:app:Total send_message processing time: 40.44 seconds
+INFO:     172.31.196.76:53162 - "POST /send_message HTTP/1.1" 200 OK
+INFO:app:Retrieved chat history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:app:Total chat history processing time: 1.09 seconds
+INFO:     172.31.196.76:53162 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=10 "HTTP/1.1 200 OK"
+INFO:app:Retrieved video analysis history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:app:Total video analysis history processing time: 0.75 seconds
+INFO:     172.31.196.76:50450 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:chatbot:Session history processing time: 30.54 seconds
+INFO:chatbot:Gemini API call time: 1.88 seconds
+INFO:chatbot:Total message processing time: 32.42 seconds
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:app:Total send_message processing time: 40.39 seconds
+INFO:     172.31.196.76:53118 - "POST /send_message HTTP/1.1" 200 OK
+INFO:app:Retrieved chat history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:app:Total chat history processing time: 1.11 seconds
+INFO:     172.31.196.76:53118 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=10 "HTTP/1.1 200 OK"
+INFO:app:Retrieved video analysis history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:app:Total video analysis history processing time: 0.74 seconds
+INFO:     172.31.196.76:45644 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:chatbot:Session history processing time: 29.48 seconds
+INFO:chatbot:Gemini API call time: 2.37 seconds
+INFO:chatbot:Total message processing time: 31.85 seconds
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:app:Total send_message processing time: 39.55 seconds
+INFO:     172.31.196.76:42420 - "POST /send_message HTTP/1.1" 200 OK
+INFO:app:Retrieved chat history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:app:Total chat history processing time: 1.08 seconds
+INFO:     172.31.196.76:42420 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=10 "HTTP/1.1 200 OK"
+INFO:app:Retrieved video analysis history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:app:Total video analysis history processing time: 0.76 seconds
+INFO:     172.31.196.76:47450 - "GET /video_analysis_history HTTP/1.1" 200 OK

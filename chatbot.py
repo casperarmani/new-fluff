@@ -49,8 +49,8 @@ class Chatbot:
         start_time = time.time()
         try:
             history_time = time.time()
-            # Process only the last 10 messages
-            recent_history = session_history[-10:]
+            # Process only the last 5 messages to reduce processing time
+            recent_history = session_history[-5:]
             for history_item in recent_history:
                 self.chat_session.send_message(history_item['message'])
             logger.info(f"Session history processing time: {time.time() - history_time:.2f} seconds")
