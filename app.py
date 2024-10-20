@@ -6,10 +6,10 @@ from fastapi.security import OAuth2AuthorizationCodeBearer
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from chatbot import Chatbot
-from database import create_user, get_user_by_username, insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history
+from database import create_user, get_user_by_username, insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history, check_user_exists
 from dotenv import load_dotenv
 import uvicorn
-from supabase import create_client, Client
+from supabase.client import create_client, Client
 import uuid
 
 load_dotenv()
@@ -28,10 +28,13 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY"))
 
 # Initialize Supabase client
-supabase: Client = create_client(
-    os.environ.get("SUPABASE_URL"),
-    os.environ.get("SUPABASE_ANON_KEY")
-)
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_ANON_KEY")
+
+if not supabase_url or not supabase_key:
+    raise ValueError("SUPABASE_URL or SUPABASE_ANON_KEY is missing from environment variables")
+
+supabase: Client = create_client(supabase_url, supabase_key)
 
 def get_current_user(request: Request):
     user = request.session.get('user')
@@ -64,18 +67,22 @@ async def login_post(request: Request, email: str = Form(...), password: str = F
     try:
         response = supabase.auth.sign_in_with_password({"email": email, "password": password})
         user = response.user
-        request.session['user'] = {
-            'id': str(user.id),
-            'email': user.email,
-        }
-        return JSONResponse({
-            "success": True,
-            "message": "Login successful",
-            "user": {
-                "id": str(user.id),
-                "email": user.email
+        if user and user.email:
+            db_user = get_user_by_username(user.email)
+            request.session['user'] = {
+                'id': str(db_user['id']),
+                'email': user.email,
             }
-        })
+            return JSONResponse({
+                "success": True,
+                "message": "Login successful",
+                "user": {
+                    "id": str(db_user['id']),
+                    "email": user.email
+                }
+            })
+        else:
+            raise ValueError("Invalid user data received from Supabase")
     except Exception as e:
         return JSONResponse({"success": False, "message": str(e)}, status_code=400)
 
@@ -89,13 +96,13 @@ async def signup_post(request: Request, email: str = Form(...), password: str = 
     try:
         response = supabase.auth.sign_up({"email": email, "password": password})
         user = response.user
-        if user:
+        if user and user.email:
+            username = email.split('@')[0]
+            db_user = create_user(username)
             request.session['user'] = {
-                'id': str(user.id),
+                'id': str(db_user['id']),
                 'email': user.email,
             }
-            username = email.split('@')[0]
-            create_user(username)
             return JSONResponse({"success": True, "message": "Signup successful"})
         else:
             return JSONResponse({"success": False, "message": "Signup failed"}, status_code=400)
@@ -120,11 +127,16 @@ async def send_message(
 ):
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
+    
+    if not check_user_exists(user_id):
+        raise HTTPException(status_code=400, detail="User does not exist")
+    
     if video:
         video_path = os.path.join('temp', video.filename)
         os.makedirs('temp', exist_ok=True)
         with open(video_path, "wb") as buffer:
-            buffer.write(await video.read())
+            content = await video.read()
+            buffer.write(content)
         
         analysis_result = chatbot.analyze_video(video_path, message)
         os.remove(video_path)
