@@ -1,4 +1,5 @@
 import os
+import time
 from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,8 +15,13 @@ import uuid
 import json
 from redis_config import get_redis_client, test_redis_connection, get_session_history
 import redis
+import logging
 
 load_dotenv()
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 chatbot = Chatbot()
@@ -42,9 +48,9 @@ supabase: Client = create_client(supabase_url, supabase_key)
 # Initialize Redis client
 try:
     redis_client = get_redis_client()
-    print("Redis client initialized successfully" if redis_client else "Failed to initialize Redis client")
+    logger.info("Redis client initialized successfully" if redis_client else "Failed to initialize Redis client")
 except (ValueError, redis.exceptions.ConnectionError) as e:
-    print(f"Failed to initialize Redis client: {str(e)}")
+    logger.error(f"Failed to initialize Redis client: {str(e)}")
     redis_client = None
 
 @app.on_event("startup")
@@ -139,6 +145,7 @@ async def send_message(
     message: str = Form(""),
     video: UploadFile = File(None)
 ):
+    start_time = time.time()
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     
@@ -158,27 +165,29 @@ async def send_message(
         os.remove(video_path)
         
         insert_video_analysis(user_id, video.filename, analysis_result)
-        # Invalidate video analysis cache
         if redis_client:
             try:
                 redis_client.delete(f"video_analysis_history:{user_id}")
             except redis.exceptions.ConnectionError:
-                print("Failed to invalidate video analysis cache due to Redis connection error")
-        return {"response": analysis_result}
+                logger.error("Failed to invalidate video analysis cache due to Redis connection error")
+        response = analysis_result
     else:
         response = chatbot.send_message(message, session_history)
         insert_chat_message(user_id, message, 'text')
         insert_chat_message(user_id, response, 'bot')
-        # Invalidate chat history cache
         if redis_client:
             try:
                 redis_client.delete(f"chat_history:{user_id}")
             except redis.exceptions.ConnectionError:
-                print("Failed to invalidate chat history cache due to Redis connection error")
-        return {"response": response}
+                logger.error("Failed to invalidate chat history cache due to Redis connection error")
+    
+    end_time = time.time()
+    logger.info(f"Total send_message processing time: {end_time - start_time:.2f} seconds")
+    return {"response": response}
 
 @app.get("/chat_history")
 async def chat_history(request: Request):
+    start_time = time.time()
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     
@@ -187,26 +196,33 @@ async def chat_history(request: Request):
             # Try to get chat history from Redis cache
             cached_history = redis_client.get(f"chat_history:{user_id}")
             if cached_history:
-                print(f"Retrieved chat history for user {user_id} from Redis cache")
+                logger.info(f"Retrieved chat history for user {user_id} from Redis cache")
+                end_time = time.time()
+                logger.info(f"Chat history retrieval time (Redis): {end_time - start_time:.2f} seconds")
                 return {"history": json.loads(cached_history)}
         except redis.exceptions.ConnectionError:
-            print("Failed to get chat history from Redis cache due to connection error")
+            logger.error("Failed to get chat history from Redis cache due to connection error")
     
     # If not in cache or Redis is unavailable, fetch from database
+    db_start_time = time.time()
     history = get_chat_history(user_id)
-    print(f"Retrieved chat history for user {user_id} from database")
+    logger.info(f"Retrieved chat history for user {user_id} from database")
     
     if redis_client:
         try:
             # Cache the result if Redis is available
             redis_client.setex(f"chat_history:{user_id}", 3600, json.dumps(history))  # Cache for 1 hour
         except redis.exceptions.ConnectionError:
-            print("Failed to cache chat history due to Redis connection error")
+            logger.error("Failed to cache chat history due to Redis connection error")
     
+    end_time = time.time()
+    logger.info(f"Chat history retrieval time (Database): {end_time - db_start_time:.2f} seconds")
+    logger.info(f"Total chat history processing time: {end_time - start_time:.2f} seconds")
     return {"history": history}
 
 @app.get("/video_analysis_history")
 async def video_analysis_history(request: Request):
+    start_time = time.time()
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     
@@ -215,22 +231,28 @@ async def video_analysis_history(request: Request):
             # Try to get video analysis history from Redis cache
             cached_history = redis_client.get(f"video_analysis_history:{user_id}")
             if cached_history:
-                print(f"Retrieved video analysis history for user {user_id} from Redis cache")
+                logger.info(f"Retrieved video analysis history for user {user_id} from Redis cache")
+                end_time = time.time()
+                logger.info(f"Video analysis history retrieval time (Redis): {end_time - start_time:.2f} seconds")
                 return {"history": json.loads(cached_history)}
         except redis.exceptions.ConnectionError:
-            print("Failed to get video analysis history from Redis cache due to connection error")
+            logger.error("Failed to get video analysis history from Redis cache due to connection error")
     
     # If not in cache or Redis is unavailable, fetch from database
+    db_start_time = time.time()
     history = get_video_analysis_history(user_id)
-    print(f"Retrieved video analysis history for user {user_id} from database")
+    logger.info(f"Retrieved video analysis history for user {user_id} from database")
     
     if redis_client:
         try:
             # Cache the result if Redis is available
             redis_client.setex(f"video_analysis_history:{user_id}", 3600, json.dumps(history))  # Cache for 1 hour
         except redis.exceptions.ConnectionError:
-            print("Failed to cache video analysis history due to Redis connection error")
+            logger.error("Failed to cache video analysis history due to Redis connection error")
     
+    end_time = time.time()
+    logger.info(f"Video analysis history retrieval time (Database): {end_time - db_start_time:.2f} seconds")
+    logger.info(f"Total video analysis history processing time: {end_time - start_time:.2f} seconds")
     return {"history": history}
 
 if __name__ == '__main__':

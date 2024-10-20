@@ -46,11 +46,19 @@ class Chatbot:
         )
 
     def send_message(self, message, session_history=[]):
+        start_time = time.time()
         try:
+            history_time = time.time()
             for history_item in session_history:
                 self.chat_session.send_message(history_item['message'])
+            logger.info(f"Session history processing time: {time.time() - history_time:.2f} seconds")
             
+            api_call_time = time.time()
             response = self.chat_session.send_message(message)
+            logger.info(f"Gemini API call time: {time.time() - api_call_time:.2f} seconds")
+            
+            end_time = time.time()
+            logger.info(f"Total message processing time: {end_time - start_time:.2f} seconds")
             return response.text
         except Exception as e:
             logger.error(f"Error sending message: {str(e)}")
