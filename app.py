@@ -6,7 +6,7 @@ from fastapi.security import OAuth2AuthorizationCodeBearer
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from chatbot import Chatbot
-from database import create_user, get_user_by_username, insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history, check_user_exists
+from database import create_user, get_user_by_email, insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history, check_user_exists
 from dotenv import load_dotenv
 import uvicorn
 from supabase.client import create_client, Client
@@ -68,7 +68,7 @@ async def login_post(request: Request, email: str = Form(...), password: str = F
         response = supabase.auth.sign_in_with_password({"email": email, "password": password})
         user = response.user
         if user and user.email:
-            db_user = get_user_by_username(user.email)
+            db_user = get_user_by_email(user.email)
             request.session['user'] = {
                 'id': str(db_user['id']),
                 'email': user.email,
@@ -97,8 +97,7 @@ async def signup_post(request: Request, email: str = Form(...), password: str = 
         response = supabase.auth.sign_up({"email": email, "password": password})
         user = response.user
         if user and user.email:
-            username = email.split('@')[0]
-            db_user = create_user(username)
+            db_user = create_user(user.email)
             request.session['user'] = {
                 'id': str(db_user['id']),
                 'email': user.email,

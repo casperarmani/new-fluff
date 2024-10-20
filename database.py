@@ -9,12 +9,12 @@ supabase: Client = create_client(
     os.environ.get("SUPABASE_ANON_KEY")
 )
 
-def create_user(username: str) -> Dict:
-    response = supabase.table("users").insert({"username": username}).execute()
+def create_user(email: str) -> Dict:
+    response = supabase.table("users").insert({"email": email}).execute()
     return response.data[0] if response.data else {}
 
-def get_user_by_username(username: str) -> Dict:
-    response = supabase.table("users").select("*").eq("username", username).execute()
+def get_user_by_email(email: str) -> Dict:
+    response = supabase.table("users").select("*").eq("email", email).execute()
     return response.data[0] if response.data else {}
 
 def check_user_exists(user_id: uuid.UUID) -> bool:
