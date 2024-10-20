@@ -185,12 +185,18 @@ async def chat_history(request: Request):
             # Try to get chat history from Redis cache
             cached_history = redis_client.get(f"chat_history:{user_id}")
             if cached_history:
-                print(f"Retrieved chat history for user {user_id} from Redis cache")
-                return {"history": json.loads(cached_history)}
+                try:
+                    history = json.loads(cached_history)
+                    print(f"Retrieved chat history for user {user_id} from Redis cache")
+                    return {"history": history}
+                except json.JSONDecodeError:
+                    print(f"Error decoding cached chat history for user {user_id}")
         except redis.exceptions.ConnectionError:
             print("Failed to get chat history from Redis cache due to connection error")
+        except redis.exceptions.ResponseError as e:
+            print(f"Redis error: {str(e)}. Falling back to database.")
     
-    # If not in cache or Redis is unavailable, fetch from database
+    # If not in cache, Redis is unavailable, or there was an error, fetch from database
     history = get_chat_history(user_id)
     print(f"Retrieved chat history for user {user_id} from database")
     
@@ -198,8 +204,8 @@ async def chat_history(request: Request):
         try:
             # Cache the result if Redis is available
             redis_client.setex(f"chat_history:{user_id}", 300, json.dumps(history))  # Cache for 5 minutes
-        except redis.exceptions.ConnectionError:
-            print("Failed to cache chat history due to Redis connection error")
+        except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError) as e:
+            print(f"Failed to cache chat history: {str(e)}")
     
     return {"history": history}
 
@@ -213,12 +219,18 @@ async def video_analysis_history(request: Request):
             # Try to get video analysis history from Redis cache
             cached_history = redis_client.get(f"video_analysis_history:{user_id}")
             if cached_history:
-                print(f"Retrieved video analysis history for user {user_id} from Redis cache")
-                return {"history": json.loads(cached_history)}
+                try:
+                    history = json.loads(cached_history)
+                    print(f"Retrieved video analysis history for user {user_id} from Redis cache")
+                    return {"history": history}
+                except json.JSONDecodeError:
+                    print(f"Error decoding cached video analysis history for user {user_id}")
         except redis.exceptions.ConnectionError:
             print("Failed to get video analysis history from Redis cache due to connection error")
+        except redis.exceptions.ResponseError as e:
+            print(f"Redis error: {str(e)}. Falling back to database.")
     
-    # If not in cache or Redis is unavailable, fetch from database
+    # If not in cache, Redis is unavailable, or there was an error, fetch from database
     history = get_video_analysis_history(user_id)
     print(f"Retrieved video analysis history for user {user_id} from database")
     
@@ -226,8 +238,8 @@ async def video_analysis_history(request: Request):
         try:
             # Cache the result if Redis is available
             redis_client.setex(f"video_analysis_history:{user_id}", 300, json.dumps(history))  # Cache for 5 minutes
-        except redis.exceptions.ConnectionError:
-            print("Failed to cache video analysis history due to Redis connection error")
+        except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError) as e:
+            print(f"Failed to cache video analysis history: {str(e)}")
     
     return {"history": history}
 
