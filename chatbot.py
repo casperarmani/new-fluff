@@ -45,8 +45,13 @@ class Chatbot:
             ]
         )
 
-    def send_message(self, message):
+    def send_message(self, message, session_history=[]):
         try:
+            # Add session history to the chat session
+            for history_item in session_history:
+                self.chat_session.send_message(history_item['message'])
+            
+            # Send the current message
             response = self.chat_session.send_message(message)
             return response.text
         except Exception as e:

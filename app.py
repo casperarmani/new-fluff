@@ -12,7 +12,7 @@ import uvicorn
 from supabase.client import create_client, Client
 import uuid
 import json
-from redis_config import get_redis_client, test_redis_connection
+from redis_config import get_redis_client, test_redis_connection, get_session_history
 import redis
 
 load_dotenv()
@@ -145,6 +145,8 @@ async def send_message(
     if not check_user_exists(user_id):
         raise HTTPException(status_code=400, detail="User does not exist")
     
+    session_history = get_session_history(user_id)
+    
     if video:
         video_path = os.path.join('temp', video.filename)
         os.makedirs('temp', exist_ok=True)
@@ -164,7 +166,7 @@ async def send_message(
                 print("Failed to invalidate video analysis cache due to Redis connection error")
         return {"response": analysis_result}
     else:
-        response = chatbot.send_message(message)
+        response = chatbot.send_message(message, session_history)
         insert_chat_message(user_id, message, 'text')
         insert_chat_message(user_id, response, 'bot')
         # Invalidate chat history cache
@@ -197,7 +199,7 @@ async def chat_history(request: Request):
     if redis_client:
         try:
             # Cache the result if Redis is available
-            redis_client.setex(f"chat_history:{user_id}", 300, json.dumps(history))  # Cache for 5 minutes
+            redis_client.setex(f"chat_history:{user_id}", 3600, json.dumps(history))  # Cache for 1 hour
         except redis.exceptions.ConnectionError:
             print("Failed to cache chat history due to Redis connection error")
     
@@ -225,7 +227,7 @@ async def video_analysis_history(request: Request):
     if redis_client:
         try:
             # Cache the result if Redis is available
-            redis_client.setex(f"video_analysis_history:{user_id}", 300, json.dumps(history))  # Cache for 5 minutes
+            redis_client.setex(f"video_analysis_history:{user_id}", 3600, json.dumps(history))  # Cache for 1 hour
         except redis.exceptions.ConnectionError:
             print("Failed to cache video analysis history due to Redis connection error")
     
