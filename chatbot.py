@@ -27,6 +27,12 @@ class Chatbot:
             "top_p": 1,
             "top_k": 1,
             "max_output_tokens": 2048,
+            "safety_settings": [
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+            ]
         }
         self.model = genai.GenerativeModel(
             model_name="gemini-1.5-pro-latest",
@@ -49,10 +55,10 @@ class Chatbot:
         try:
             # Add session history to the chat session
             for history_item in session_history:
-                self.chat_session.send_message(history_item['message'])
+                self.chat_session.send_message(history_item['message'], safety_settings=self.generation_config["safety_settings"])
             
             # Send the current message
-            response = self.chat_session.send_message(message)
+            response = self.chat_session.send_message(message, safety_settings=self.generation_config["safety_settings"])
             return response.text
         except Exception as e:
             logger.error(f"Error sending message: {str(e)}")
@@ -76,7 +82,9 @@ class Chatbot:
             
             full_prompt = f"{default_prompt}\n\nAdditional instructions: {prompt}" if prompt else default_prompt
             
-            response = self.model.generate_content([video_file, full_prompt], request_options={"timeout": 300})
+            response = self.model.generate_content([video_file, full_prompt], 
+                                                   request_options={"timeout": 300},
+                                                   safety_settings=self.generation_config["safety_settings"])
             return response.text
         except Exception as e:
             logger.error(f"Error analyzing video: {str(e)}")
