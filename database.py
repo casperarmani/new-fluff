@@ -9,7 +9,7 @@ supabase: Client = create_client(
     os.environ.get("SUPABASE_ANON_KEY")
 )
 
-async def create_user(username: str) -> Dict:
+def create_user(username: str) -> Dict:
     response = supabase.table("users").insert({"username": username}).execute()
     return response.data[0] if response.data else {}
 
@@ -17,7 +17,14 @@ def get_user_by_username(username: str) -> Dict:
     response = supabase.table("users").select("*").eq("username", username).execute()
     return response.data[0] if response.data else {}
 
+def check_user_exists(user_id: uuid.UUID) -> bool:
+    response = supabase.table("users").select("id").eq("id", str(user_id)).execute()
+    return len(response.data) > 0
+
 def insert_chat_message(user_id: uuid.UUID, message: str, chat_type: str = 'text') -> Dict:
+    user_exists = check_user_exists(user_id)
+    if not user_exists:
+        raise ValueError(f"User with id {user_id} does not exist")
     response = supabase.table("user_chat_history").insert({
         "user_id": str(user_id),
         "message": message,

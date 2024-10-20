@@ -95,7 +95,7 @@ async def signup_post(request: Request, email: str = Form(...), password: str = 
                 'email': user.email,
             }
             username = email.split('@')[0]
-            await create_user(username)
+            create_user(username)
             return JSONResponse({"success": True, "message": "Signup successful"})
         else:
             return JSONResponse({"success": False, "message": "Signup failed"}, status_code=400)
@@ -129,26 +129,26 @@ async def send_message(
         analysis_result = chatbot.analyze_video(video_path, message)
         os.remove(video_path)
         
-        await insert_video_analysis(user_id, video.filename, analysis_result)
+        insert_video_analysis(user_id, video.filename, analysis_result)
         return {"response": analysis_result}
     else:
         response = chatbot.send_message(message)
-        await insert_chat_message(user_id, message, 'text')
-        await insert_chat_message(user_id, response, 'bot')
+        insert_chat_message(user_id, message, 'text')
+        insert_chat_message(user_id, response, 'bot')
         return {"response": response}
 
 @app.get("/chat_history")
 async def chat_history(request: Request):
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
-    history = await get_chat_history(user_id)
+    history = get_chat_history(user_id)
     return {"history": history}
 
 @app.get("/video_analysis_history")
 async def video_analysis_history(request: Request):
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
-    history = await get_video_analysis_history(user_id)
+    history = get_video_analysis_history(user_id)
     return {"history": history}
 
 if __name__ == '__main__':

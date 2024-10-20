@@ -15,6 +15,18 @@ author = "agent"
 task = "workflow.run"
 args = "Start FastAPI server"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Update Database Schema"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Create Execute SQL Function"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Check Environment Variables"
+
 [[workflows.workflow]]
 name = "Start FastAPI server"
 author = "agent"
@@ -26,6 +38,39 @@ agentRequireRestartOnSave = false
 task = "shell.exec"
 args = "uvicorn app:app --host 0.0.0.0 --port 8000 --reload"
 waitForPort = 8000
+
+[[workflows.workflow]]
+name = "Update Database Schema"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python update_database.py"
+
+[[workflows.workflow]]
+name = "Create Execute SQL Function"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python create_execute_sql_function.py"
+
+[[workflows.workflow]]
+name = "Check Environment Variables"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python check_env.py"
 
 [deployment]
 run = ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port 8000 --reload"]
