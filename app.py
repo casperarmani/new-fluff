@@ -1,5 +1,4 @@
 import os
-import time
 from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -7,31 +6,31 @@ from fastapi.security import OAuth2AuthorizationCodeBearer
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from chatbot import Chatbot
-from database import create_user, get_user_by_email, insert_chat_message, get_chat_history as db_get_chat_history, insert_video_analysis, get_video_analysis_history, check_user_exists
+from database import create_user, get_user_by_email, insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history, check_user_exists
 from dotenv import load_dotenv
 import uvicorn
 from supabase.client import create_client, Client
 import uuid
 import json
-from redis_config import get_redis_client, test_redis_connection, get_session_history, update_chat_history, clear_chat_history, cache_user, get_cached_user, cache_video_analysis, get_cached_video_analysis
+from redis_config import get_redis_client, test_redis_connection
 import redis
-import logging
 
 load_dotenv()
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = FastAPI()
 chatbot = Chatbot()
 
+# Create static directory if it doesn't exist
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
 
+# Mount static files
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+# Add session middleware
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY"))
 
+# Initialize Supabase client
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_ANON_KEY")
 
@@ -40,11 +39,12 @@ if not supabase_url or not supabase_key:
 
 supabase: Client = create_client(supabase_url, supabase_key)
 
+# Initialize Redis client
 try:
     redis_client = get_redis_client()
-    logger.info("Redis client initialized successfully" if redis_client else "Failed to initialize Redis client")
+    print("Redis client initialized successfully" if redis_client else "Failed to initialize Redis client")
 except (ValueError, redis.exceptions.ConnectionError) as e:
-    logger.error(f"Failed to initialize Redis client: {str(e)}")
+    print(f"Failed to initialize Redis client: {str(e)}")
     redis_client = None
 
 @app.on_event("startup")
@@ -80,25 +80,14 @@ async def login_page(request: Request):
 @app.post('/login')
 async def login_post(request: Request, email: str = Form(...), password: str = Form(...)):
     try:
-        start_time = time.time()
         response = supabase.auth.sign_in_with_password({"email": email, "password": password})
         user = response.user
         if user and user.email:
-            cached_user = get_cached_user(user.email)
-            if cached_user:
-                db_user = cached_user
-                logger.info(f"User {user.email} retrieved from cache")
-            else:
-                db_user = get_user_by_email(user.email)
-                cache_user(user.email, db_user)
-                logger.info(f"User {user.email} cached")
-            
+            db_user = get_user_by_email(user.email)
             request.session['user'] = {
                 'id': str(db_user['id']),
                 'email': user.email,
             }
-            end_time = time.time()
-            logger.info(f"Login process time: {end_time - start_time:.2f} seconds")
             return JSONResponse({
                 "success": True,
                 "message": "Login successful",
@@ -110,7 +99,6 @@ async def login_post(request: Request, email: str = Form(...), password: str = F
         else:
             raise ValueError("Invalid user data received from Supabase")
     except Exception as e:
-        logger.error(f"Login error: {str(e)}")
         return JSONResponse({"success": False, "message": str(e)}, status_code=400)
 
 @app.get('/signup', response_class=HTMLResponse)
@@ -121,31 +109,23 @@ async def signup_page(request: Request):
 @app.post('/signup')
 async def signup_post(request: Request, email: str = Form(...), password: str = Form(...)):
     try:
-        start_time = time.time()
         response = supabase.auth.sign_up({"email": email, "password": password})
         user = response.user
         if user and user.email:
             db_user = create_user(user.email)
-            cache_user(user.email, db_user)
             request.session['user'] = {
                 'id': str(db_user['id']),
                 'email': user.email,
             }
-            end_time = time.time()
-            logger.info(f"Signup process time: {end_time - start_time:.2f} seconds")
             return JSONResponse({"success": True, "message": "Signup successful"})
         else:
             return JSONResponse({"success": False, "message": "Signup failed"}, status_code=400)
     except Exception as e:
-        logger.error(f"Signup error: {str(e)}")
         return JSONResponse({"success": False, "message": str(e)}, status_code=400)
 
 @app.post('/logout')
 async def logout(request: Request):
-    user_id = request.session.get('user', {}).get('id')
     request.session.pop('user', None)
-    if user_id:
-        clear_chat_history(user_id)
     return JSONResponse({"success": True, "message": "Logout successful"})
 
 @app.get("/auth_status")
@@ -159,14 +139,11 @@ async def send_message(
     message: str = Form(""),
     video: UploadFile = File(None)
 ):
-    start_time = time.time()
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     
     if not check_user_exists(user_id):
         raise HTTPException(status_code=400, detail="User does not exist")
-    
-    session_history = get_session_history(str(user_id))
     
     if video:
         video_path = os.path.join('temp', video.filename)
@@ -179,53 +156,79 @@ async def send_message(
         os.remove(video_path)
         
         insert_video_analysis(user_id, video.filename, analysis_result)
-        cache_video_analysis(str(user_id), [{"filename": video.filename, "analysis": analysis_result}])
-        response = analysis_result
+        # Invalidate video analysis cache
+        if redis_client:
+            try:
+                redis_client.delete(f"video_analysis_history:{user_id}")
+            except redis.exceptions.ConnectionError:
+                print("Failed to invalidate video analysis cache due to Redis connection error")
+        return {"response": analysis_result}
     else:
-        response = chatbot.send_message(message, session_history)
+        response = chatbot.send_message(message)
         insert_chat_message(user_id, message, 'text')
         insert_chat_message(user_id, response, 'bot')
-        update_chat_history(str(user_id), {'message': message, 'type': 'text'})
-        update_chat_history(str(user_id), {'message': response, 'type': 'bot'})
-    
-    end_time = time.time()
-    logger.info(f"Total send_message processing time: {end_time - start_time:.2f} seconds")
-    return {"response": response}
+        # Invalidate chat history cache
+        if redis_client:
+            try:
+                redis_client.delete(f"chat_history:{user_id}")
+            except redis.exceptions.ConnectionError:
+                print("Failed to invalidate chat history cache due to Redis connection error")
+        return {"response": response}
 
 @app.get("/chat_history")
 async def chat_history(request: Request):
-    start_time = time.time()
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     
-    history = get_session_history(str(user_id))
-    if not history:
-        history = db_get_chat_history(user_id)
-        for item in reversed(history):
-            update_chat_history(str(user_id), item)
-    logger.info(f"Retrieved chat history for user {user_id}")
+    if redis_client:
+        try:
+            # Try to get chat history from Redis cache
+            cached_history = redis_client.get(f"chat_history:{user_id}")
+            if cached_history:
+                print(f"Retrieved chat history for user {user_id} from Redis cache")
+                return {"history": json.loads(cached_history)}
+        except redis.exceptions.ConnectionError:
+            print("Failed to get chat history from Redis cache due to connection error")
     
-    end_time = time.time()
-    logger.info(f"Total chat history processing time: {end_time - start_time:.2f} seconds")
+    # If not in cache or Redis is unavailable, fetch from database
+    history = get_chat_history(user_id)
+    print(f"Retrieved chat history for user {user_id} from database")
+    
+    if redis_client:
+        try:
+            # Cache the result if Redis is available
+            redis_client.setex(f"chat_history:{user_id}", 300, json.dumps(history))  # Cache for 5 minutes
+        except redis.exceptions.ConnectionError:
+            print("Failed to cache chat history due to Redis connection error")
+    
     return {"history": history}
 
 @app.get("/video_analysis_history")
 async def video_analysis_history(request: Request):
-    start_time = time.time()
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     
-    cached_history = get_cached_video_analysis(str(user_id))
-    if cached_history:
-        history = cached_history
-        logger.info(f"Retrieved video analysis history for user {user_id} from cache")
-    else:
-        history = get_video_analysis_history(user_id)
-        cache_video_analysis(str(user_id), history)
-        logger.info(f"Retrieved video analysis history for user {user_id} from database and cached it")
+    if redis_client:
+        try:
+            # Try to get video analysis history from Redis cache
+            cached_history = redis_client.get(f"video_analysis_history:{user_id}")
+            if cached_history:
+                print(f"Retrieved video analysis history for user {user_id} from Redis cache")
+                return {"history": json.loads(cached_history)}
+        except redis.exceptions.ConnectionError:
+            print("Failed to get video analysis history from Redis cache due to connection error")
     
-    end_time = time.time()
-    logger.info(f"Total video analysis history processing time: {end_time - start_time:.2f} seconds")
+    # If not in cache or Redis is unavailable, fetch from database
+    history = get_video_analysis_history(user_id)
+    print(f"Retrieved video analysis history for user {user_id} from database")
+    
+    if redis_client:
+        try:
+            # Cache the result if Redis is available
+            redis_client.setex(f"video_analysis_history:{user_id}", 300, json.dumps(history))  # Cache for 5 minutes
+        except redis.exceptions.ConnectionError:
+            print("Failed to cache video analysis history due to Redis connection error")
+    
     return {"history": history}
 
 if __name__ == '__main__':

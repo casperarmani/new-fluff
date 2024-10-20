@@ -23,10 +23,10 @@ genai.configure(api_key=api_key)
 class Chatbot:
     def __init__(self):
         self.generation_config = {
-            "temperature": 1,
-            "top_p": 0.95,
-            "top_k": 64,
-            "max_output_tokens": 8192,
+            "temperature": 0.9,
+            "top_p": 1,
+            "top_k": 1,
+            "max_output_tokens": 2048,
         }
         self.model = genai.GenerativeModel(
             model_name="gemini-1.5-pro-latest",
@@ -45,22 +45,9 @@ class Chatbot:
             ]
         )
 
-    def send_message(self, message, session_history=[]):
-        start_time = time.time()
+    def send_message(self, message):
         try:
-            history_time = time.time()
-            # Process only the last 5 messages to reduce processing time
-            recent_history = session_history[-5:]
-            for history_item in recent_history:
-                self.chat_session.send_message(history_item['message'])
-            logger.info(f"Session history processing time: {time.time() - history_time:.2f} seconds")
-            
-            api_call_time = time.time()
             response = self.chat_session.send_message(message)
-            logger.info(f"Gemini API call time: {time.time() - api_call_time:.2f} seconds")
-            
-            end_time = time.time()
-            logger.info(f"Total message processing time: {end_time - start_time:.2f} seconds")
             return response.text
         except Exception as e:
             logger.error(f"Error sending message: {str(e)}")
@@ -84,8 +71,7 @@ class Chatbot:
             
             full_prompt = f"{default_prompt}\n\nAdditional instructions: {prompt}" if prompt else default_prompt
             
-            response = self.model.generate_content([video_file, full_prompt], 
-                                                   request_options={"timeout": 300})
+            response = self.model.generate_content([video_file, full_prompt], request_options={"timeout": 300})
             return response.text
         except Exception as e:
             logger.error(f"Error analyzing video: {str(e)}")
