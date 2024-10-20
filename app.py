@@ -12,7 +12,7 @@ import uvicorn
 from supabase.client import create_client, Client
 import uuid
 import json
-from redis_config import get_redis_client
+from redis_config import get_redis_client, test_redis_connection
 import redis
 
 load_dotenv()
@@ -42,9 +42,14 @@ supabase: Client = create_client(supabase_url, supabase_key)
 # Initialize Redis client
 try:
     redis_client = get_redis_client()
+    print("Redis client initialized successfully" if redis_client else "Failed to initialize Redis client")
 except (ValueError, redis.exceptions.ConnectionError) as e:
     print(f"Failed to initialize Redis client: {str(e)}")
     redis_client = None
+
+@app.on_event("startup")
+async def startup_event():
+    test_redis_connection()
 
 def get_current_user(request: Request):
     user = request.session.get('user')
@@ -180,12 +185,14 @@ async def chat_history(request: Request):
             # Try to get chat history from Redis cache
             cached_history = redis_client.get(f"chat_history:{user_id}")
             if cached_history:
+                print(f"Retrieved chat history for user {user_id} from Redis cache")
                 return {"history": json.loads(cached_history)}
         except redis.exceptions.ConnectionError:
             print("Failed to get chat history from Redis cache due to connection error")
     
     # If not in cache or Redis is unavailable, fetch from database
     history = get_chat_history(user_id)
+    print(f"Retrieved chat history for user {user_id} from database")
     
     if redis_client:
         try:
@@ -206,12 +213,14 @@ async def video_analysis_history(request: Request):
             # Try to get video analysis history from Redis cache
             cached_history = redis_client.get(f"video_analysis_history:{user_id}")
             if cached_history:
+                print(f"Retrieved video analysis history for user {user_id} from Redis cache")
                 return {"history": json.loads(cached_history)}
         except redis.exceptions.ConnectionError:
             print("Failed to get video analysis history from Redis cache due to connection error")
     
     # If not in cache or Redis is unavailable, fetch from database
     history = get_video_analysis_history(user_id)
+    print(f"Retrieved video analysis history for user {user_id} from database")
     
     if redis_client:
         try:
