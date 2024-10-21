@@ -18,33 +18,36 @@ supabase: Client = create_client(
     os.environ.get("SUPABASE_ANON_KEY")
 )
 
-async def create_user(email: str) -> Dict:
+# Initialize Redis client
+redis_client = get_redis_client()
+
+def create_user(email: str) -> Dict:
     try:
-        response = await asyncio.to_thread(supabase.table("users").insert({"email": email}).execute)
+        response = supabase.table("users").insert({"email": email}).execute()
         logger.info(f"Successfully created user with email: {email}")
         return response.data[0] if response.data else {}
     except Exception as e:
         logger.error(f"Error creating user: {str(e)}")
         raise
 
-async def get_user_by_email(email: str) -> Dict:
+def get_user_by_email(email: str) -> Dict:
     try:
-        response = await asyncio.to_thread(supabase.table("users").select("*").eq("email", email).execute)
+        response = supabase.table("users").select("*").eq("email", email).execute()
         return response.data[0] if response.data else {}
     except Exception as e:
         logger.error(f"Error getting user by email: {str(e)}")
         raise
 
-async def check_user_exists(user_id: uuid.UUID) -> bool:
+def check_user_exists(user_id: uuid.UUID) -> bool:
     try:
-        response = await asyncio.to_thread(supabase.table("users").select("id").eq("id", str(user_id)).execute)
+        response = supabase.table("users").select("id").eq("id", str(user_id)).execute()
         return len(response.data) > 0
     except Exception as e:
         logger.error(f"Error checking if user exists: {str(e)}")
         raise
 
 async def async_insert_chat_message(user_id: uuid.UUID, message: str, chat_type: str = 'text') -> Dict:
-    user_exists = await check_user_exists(user_id)
+    user_exists = check_user_exists(user_id)
     if not user_exists:
         raise ValueError(f"User with id {user_id} does not exist")
     try:
