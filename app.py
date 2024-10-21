@@ -12,7 +12,7 @@ import uvicorn
 from supabase.client import create_client, Client
 import uuid
 import json
-from redis_config import get_redis_client, test_redis_connection
+from redis_config import get_redis_client, test_redis_connection, CHAT_SESSION_TTL
 import redis
 import logging
 import traceback
@@ -97,6 +97,19 @@ async def login_post(request: Request, email: str = Form(...), password: str = F
                 'id': str(db_user['id']),
                 'email': user.email,
             }
+            
+            # Load chat history and video analysis history into Redis
+            user_id = uuid.UUID(db_user['id'])
+            chat_history = get_chat_history(user_id)
+            video_history = get_video_analysis_history(user_id)
+            
+            if redis_client:
+                try:
+                    redis_client.setex(f"chat_history:{user_id}", CHAT_SESSION_TTL, json.dumps(chat_history))
+                    redis_client.setex(f"video_analysis_history:{user_id}", CHAT_SESSION_TTL, json.dumps(video_history))
+                except redis.exceptions.ConnectionError:
+                    logger.error("Failed to cache user history due to Redis connection error")
+            
             return JSONResponse({
                 "success": True,
                 "message": "Login successful",
@@ -219,7 +232,7 @@ async def video_analysis_history(request: Request):
         
         if redis_client:
             try:
-                redis_client.setex(f"video_analysis_history:{user_id}", 300, json.dumps(history))
+                redis_client.setex(f"video_analysis_history:{user_id}", CHAT_SESSION_TTL, json.dumps(history))
             except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError) as e:
                 logger.warning(f"Failed to cache video analysis history: {str(e)}")
         

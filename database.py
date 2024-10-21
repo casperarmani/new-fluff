@@ -72,7 +72,7 @@ def get_chat_history(user_id: uuid.UUID, limit: int = 50) -> List[Dict]:
         logger.error(f"Error retrieving from Redis cache: {str(e)}")
     
     # If not in cache or error occurred, get from Supabase
-    response = supabase.table("user_chat_history").select("*").eq("user_id", str(user_id)).order("timestamp", desc=True).limit(limit).execute()
+    response = supabase.table("user_chat_history").select("*").eq("user_id", str(user_id)).order("COALESCE(timestamp, CURRENT_TIMESTAMP)", desc=True).limit(limit).execute()
     history = response.data
     
     # Update Redis cache
@@ -117,7 +117,7 @@ def get_video_analysis_history(user_id: uuid.UUID, limit: int = 10) -> List[Dict
         logger.error(f"Error retrieving from Redis cache: {str(e)}")
     
     # If not in cache or error occurred, get from Supabase
-    response = supabase.table("video_analysis_output").select("*").eq("user_id", str(user_id)).order("timestamp", desc=True).limit(limit).execute()
+    response = supabase.table("video_analysis_output").select("*").eq("user_id", str(user_id)).order("COALESCE(timestamp, CURRENT_TIMESTAMP)", desc=True).limit(limit).execute()
     history = response.data
     
     # Update Redis cache
