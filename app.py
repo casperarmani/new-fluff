@@ -183,7 +183,7 @@ async def chat_history(request: Request):
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     
-    history = get_chat_history(user_id)
+    history = await get_chat_history(user_id)
     return {"history": history}
 
 @app.get("/video_analysis_history")
@@ -191,7 +191,7 @@ async def video_analysis_history(request: Request):
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     
-    history = get_video_analysis_history(user_id)
+    history = await get_video_analysis_history(user_id)
     return {"history": history}
 
 if __name__ == '__main__':

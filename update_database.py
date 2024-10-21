@@ -1,10 +1,5 @@
 import os
 from supabase import create_client, Client
-import logging
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Initialize Supabase client with service role key
 supabase_url = os.environ.get("SUPABASE_URL")
@@ -17,26 +12,29 @@ supabase: Client = create_client(supabase_url, supabase_key)
 
 def update_schema():
     schema_updates = [
-        "ALTER TABLE user_chat_history ADD COLUMN IF NOT EXISTS \"TIMESTAMP\" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;",
-        "ALTER TABLE video_analysis_output ADD COLUMN IF NOT EXISTS \"TIMESTAMP\" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;",
-        "ALTER TABLE user_chat_history ALTER COLUMN \"TIMESTAMP\" SET DEFAULT CURRENT_TIMESTAMP;",
-        "ALTER TABLE video_analysis_output ALTER COLUMN \"TIMESTAMP\" SET DEFAULT CURRENT_TIMESTAMP;",
+        "ALTER TABLE users ALTER COLUMN id TYPE uuid USING (id::uuid);",
+        "ALTER TABLE user_chat_history ALTER COLUMN user_id TYPE uuid USING (user_id::uuid);",
+        "ALTER TABLE video_analysis_output ALTER COLUMN user_id TYPE uuid USING (user_id::uuid);",
+        "ALTER TABLE user_chat_history DROP CONSTRAINT IF EXISTS user_chat_history_user_id_fkey;",
+        "ALTER TABLE user_chat_history ADD CONSTRAINT user_chat_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;",
+        "ALTER TABLE video_analysis_output DROP CONSTRAINT IF EXISTS video_analysis_output_user_id_fkey;",
+        "ALTER TABLE video_analysis_output ADD CONSTRAINT video_analysis_output_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;"
     ]
 
     for sql in schema_updates:
         try:
-            response = supabase.postgres.sql(sql)
-            logger.info(f"Executed SQL successfully: {sql}")
-            logger.info(f"Response: {response}")
+            response = supabase.postgrest.rpc('rpc_query', {'query': sql})
+            print(f"Executed SQL successfully: {sql}")
+            print(f"Response: {response}")
         except Exception as e:
-            logger.error(f"Error executing SQL: {sql}")
-            logger.error(f"Error message: {str(e)}")
+            print(f"Error executing SQL: {sql}")
+            print(f"Error message: {str(e)}")
             return False
     return True
 
 if __name__ == "__main__":
-    logger.info("Updating schema...")
+    print("Updating schema...")
     if update_schema():
-        logger.info("Schema updated successfully")
+        print("Schema updated successfully")
     else:
-        logger.error("Failed to update schema")
+        print("Failed to update schema")
