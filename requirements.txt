@@ -9,10 +9,7 @@ aiofiles==0.8.0
 authlib==1.2.0
 itsdangerous==2.1.2
 httpx==0.24.1
-email-validator
-flask
-flask-sqlalchemy
-psycopg2-binary
-supabase
 supabase==2.0.0
-redis
+redis==4.6.0
+starlette==0.14.2
+uuid==1.30
