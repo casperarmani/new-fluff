@@ -16,6 +16,7 @@ from redis_config import get_redis_client, test_redis_connection
 import redis
 import logging
 import traceback
+import time
 
 load_dotenv()
 
@@ -184,6 +185,7 @@ async def send_message(
 
 @app.get("/chat_history")
 async def chat_history(request: Request):
+    start_time = time.time()
     try:
         current_user = get_current_user(request)
         user_id = current_user['id']
@@ -203,6 +205,8 @@ async def chat_history(request: Request):
                 if cached_history:
                     history = json.loads(cached_history)
                     logger.info(f"Retrieved chat history for user {user_id} from Redis cache")
+                    end_time = time.time()
+                    logger.info(f"Total chat history processing time: {end_time - start_time:.2f} seconds")
                     return {"history": history}
             except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError) as e:
                 logger.warning(f"Redis error: {str(e)}. Falling back to database.")
@@ -220,6 +224,8 @@ async def chat_history(request: Request):
             except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError) as e:
                 logger.warning(f"Failed to cache chat history: {str(e)}")
         
+        end_time = time.time()
+        logger.info(f"Total chat history processing time: {end_time - start_time:.2f} seconds")
         return {"history": history}
     except HTTPException as he:
         logger.error(f"HTTP Exception in chat_history: {str(he)}")
@@ -227,6 +233,8 @@ async def chat_history(request: Request):
     except Exception as e:
         logger.error(f"Unexpected error in chat_history endpoint: {str(e)}")
         logger.error(traceback.format_exc())
+        end_time = time.time()
+        logger.error(f"Error occurred after {end_time - start_time:.2f} seconds")
         return JSONResponse({"error": "An unexpected error occurred"}, status_code=500)
 
 @app.get("/video_analysis_history")
