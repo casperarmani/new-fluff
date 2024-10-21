@@ -1,12 +1,12 @@
 import os
-from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status
+from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2AuthorizationCodeBearer
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from chatbot import Chatbot
-from database import create_user, get_user_by_email, async_insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history, check_user_exists
+from database import create_user, get_user_by_email, async_insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history, check_user_exists, write_messages_to_db
 from dotenv import load_dotenv
 import uvicorn
 from supabase.client import create_client, Client
@@ -18,6 +18,7 @@ import logging
 import traceback
 import time
 import asyncio
+from fastapi_utils.tasks import repeat_every
 
 load_dotenv()
 
@@ -159,13 +160,16 @@ async def auth_status(request: Request):
 async def send_message(
     request: Request,
     message: str = Form(""),
-    video: UploadFile = File(None)
+    video: UploadFile = File(None),
+    background_tasks: BackgroundTasks = BackgroundTasks()
 ):
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     
     if not check_user_exists(user_id):
         raise HTTPException(status_code=400, detail="User does not exist")
+    
+    cache_key = f"chat_history:{user_id}"
     
     if video:
         video_path = os.path.join('temp', video.filename)
@@ -185,61 +189,107 @@ async def send_message(
                 logger.error("Failed to invalidate video analysis cache due to Redis connection error")
         return {"response": analysis_result}
     else:
+        # Check Redis for an active chat session
+        cached_history = redis_client.get(cache_key)
+        if cached_history:
+            history = json.loads(cached_history)
+        else:
+            history = get_chat_history(user_id)
+        
+        # Add the new message to the history
+        user_message = await async_insert_chat_message(user_id, message, 'text')
+        history.insert(0, user_message)
+        
+        # Process the message with the chatbot
         response = chatbot.send_message(message)
-        await async_insert_chat_message(user_id, message, 'text')
-        await async_insert_chat_message(user_id, response, 'bot')
+        
+        # Add the bot's response to the history
+        bot_message = await async_insert_chat_message(user_id, response, 'bot')
+        history.insert(0, bot_message)
+        
+        # Update Redis cache
+        redis_client.setex(cache_key, CHAT_SESSION_TTL, json.dumps(history[:50]))
+        
+        # Schedule background task to write cached data to Supabase
+        background_tasks.add_task(write_cache_to_database, user_id)
+        
         return {"response": response}
 
 @app.get("/chat_history")
 async def chat_history(request: Request):
-    start_time = time.time()
+    current_user = get_current_user(request)
+    user_id = uuid.UUID(current_user['id'])
+    
+    cache_key = f"chat_history:{user_id}"
+    
+    # Try to get from Redis cache first
     try:
-        current_user = get_current_user(request)
-        user_id = uuid.UUID(current_user['id'])
-        
-        logger.info(f"Fetching chat history for user: {user_id}")
-        
-        history = get_chat_history(user_id)
-        
-        end_time = time.time()
-        logger.info(f"Total chat history processing time: {end_time - start_time:.2f} seconds")
-        return {"history": history}
+        cached_history = redis_client.get(cache_key)
+        if cached_history:
+            history = json.loads(cached_history)
+            logger.info(f"Retrieved chat history for user {user_id} from Redis cache")
+            return {"history": history}
     except Exception as e:
-        logger.error(f"Unexpected error in chat_history endpoint: {str(e)}")
-        logger.error(traceback.format_exc())
-        end_time = time.time()
-        logger.error(f"Error occurred after {end_time - start_time:.2f} seconds")
-        return JSONResponse({"error": "An unexpected error occurred"}, status_code=500)
+        logger.error(f"Error retrieving from Redis cache: {str(e)}")
+    
+    # If not in cache or error occurred, get from Supabase
+    history = get_chat_history(user_id)
+    
+    # Update Redis cache
+    try:
+        redis_client.setex(cache_key, CHAT_SESSION_TTL, json.dumps(history))
+    except Exception as e:
+        logger.error(f"Error updating Redis cache: {str(e)}")
+    
+    return {"history": history}
 
 @app.get("/video_analysis_history")
 async def video_analysis_history(request: Request):
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     
+    cache_key = f"video_analysis_history:{user_id}"
+    
+    # Try to get from Redis cache first
     try:
-        if redis_client:
-            try:
-                cached_history = redis_client.get(f"video_analysis_history:{user_id}")
-                if cached_history:
-                    history = json.loads(cached_history)
-                    logger.info(f"Retrieved video analysis history for user {user_id} from Redis cache")
-                    return {"history": history}
-            except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError, json.JSONDecodeError) as e:
-                logger.warning(f"Redis error: {str(e)}. Falling back to database.")
-        
-        history = get_video_analysis_history(user_id)
-        logger.info(f"Retrieved video analysis history for user {user_id} from database")
-        
-        if redis_client:
-            try:
-                redis_client.setex(f"video_analysis_history:{user_id}", CHAT_SESSION_TTL, json.dumps(history))
-            except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError) as e:
-                logger.warning(f"Failed to cache video analysis history: {str(e)}")
-        
-        return {"history": history}
+        cached_history = redis_client.get(cache_key)
+        if cached_history:
+            history = json.loads(cached_history)
+            logger.info(f"Retrieved video analysis history for user {user_id} from Redis cache")
+            return {"history": history}
     except Exception as e:
-        logger.error(f"Error in video_analysis_history endpoint: {str(e)}")
-        return JSONResponse({"error": "Internal Server Error"}, status_code=500)
+        logger.error(f"Error retrieving from Redis cache: {str(e)}")
+    
+    # If not in cache or error occurred, get from Supabase
+    history = get_video_analysis_history(user_id)
+    
+    # Update Redis cache
+    try:
+        redis_client.setex(cache_key, CHAT_SESSION_TTL, json.dumps(history))
+    except Exception as e:
+        logger.error(f"Error updating Redis cache: {str(e)}")
+    
+    return {"history": history}
+
+async def write_cache_to_database(user_id: uuid.UUID):
+    cache_key = f"chat_history:{user_id}"
+    try:
+        cached_history = redis_client.get(cache_key)
+        if cached_history:
+            history = json.loads(cached_history)
+            await write_messages_to_db(user_id, history)
+    except Exception as e:
+        logger.error(f"Error writing cache to database: {str(e)}")
+
+@app.on_event("startup")
+@repeat_every(seconds=300)  # Run every 5 minutes
+async def periodic_cache_write():
+    try:
+        for key in redis_client.keys("chat_history:*"):
+            user_id = uuid.UUID(key.decode().split(":")[1])
+            await write_cache_to_database(user_id)
+    except Exception as e:
+        logger.error(f"Error in periodic cache write: {str(e)}")
 
 if __name__ == '__main__':
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

@@ -49,11 +49,8 @@ async def async_insert_chat_message(user_id: uuid.UUID, message: str, chat_type:
         else:
             redis_client.setex(cache_key, CHAT_SESSION_TTL, json.dumps([new_message]))
 
-        # Asynchronously write to database if batch size is reached
-        cached_history = json.loads(redis_client.get(cache_key))
-        if len(cached_history) >= DB_WRITE_BATCH_SIZE:
-            asyncio.create_task(write_messages_to_db(user_id, cached_history))
-            redis_client.delete(cache_key)
+        # Asynchronously write to database
+        asyncio.create_task(write_messages_to_db(user_id, [new_message]))
 
         return new_message
     except Exception as e:
@@ -72,7 +69,17 @@ def get_chat_history(user_id: uuid.UUID, limit: int = 50) -> List[Dict]:
         logger.error(f"Error retrieving from Redis cache: {str(e)}")
     
     # If not in cache or error occurred, get from Supabase
-    response = supabase.table("user_chat_history").select("*").eq("user_id", str(user_id)).order("COALESCE(timestamp, CURRENT_TIMESTAMP)", desc=True).limit(limit).execute()
+    try:
+        response = supabase.table("user_chat_history").select("*").eq("user_id", str(user_id)).order("timestamp", desc=True).limit(limit).execute()
+    except Exception as e:
+        logger.error(f"Error retrieving from Supabase (timestamp): {str(e)}")
+        # If timestamp doesn't exist, try with created_at
+        try:
+            response = supabase.table("user_chat_history").select("*").eq("user_id", str(user_id)).order("created_at", desc=True).limit(limit).execute()
+        except Exception as e:
+            logger.error(f"Error retrieving from Supabase (created_at): {str(e)}")
+            return []
+
     history = response.data
     
     # Update Redis cache
@@ -117,7 +124,17 @@ def get_video_analysis_history(user_id: uuid.UUID, limit: int = 10) -> List[Dict
         logger.error(f"Error retrieving from Redis cache: {str(e)}")
     
     # If not in cache or error occurred, get from Supabase
-    response = supabase.table("video_analysis_output").select("*").eq("user_id", str(user_id)).order("COALESCE(timestamp, CURRENT_TIMESTAMP)", desc=True).limit(limit).execute()
+    try:
+        response = supabase.table("video_analysis_output").select("*").eq("user_id", str(user_id)).order("timestamp", desc=True).limit(limit).execute()
+    except Exception as e:
+        logger.error(f"Error retrieving from Supabase (timestamp): {str(e)}")
+        # If timestamp doesn't exist, try with created_at
+        try:
+            response = supabase.table("video_analysis_output").select("*").eq("user_id", str(user_id)).order("created_at", desc=True).limit(limit).execute()
+        except Exception as e:
+            logger.error(f"Error retrieving from Supabase (created_at): {str(e)}")
+            return []
+
     history = response.data
     
     # Update Redis cache
