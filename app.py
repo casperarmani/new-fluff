@@ -143,6 +143,10 @@ async def send_message(request: Request, message: str = Form(...), video: Option
         current_user = get_current_user(request)
         user_id = current_user["id"]
 
+        if not await check_user_exists(user_id):
+            logger.error(f"User with id {user_id} does not exist")
+            return JSONResponse(content={"error": "User not found"}, status_code=404)
+
         if video:
             # Handle video upload and analysis
             file_location = f"temp/{video.filename}"
@@ -156,6 +160,10 @@ async def send_message(request: Request, message: str = Form(...), video: Option
         else:
             # Handle text message
             response = chatbot.send_message(message, user_id)
+
+        if response is None:
+            logger.error("Chatbot response is None")
+            return JSONResponse(content={"error": "Failed to generate response"}, status_code=500)
 
         # Insert user message and bot response into chat history
         insert_chat_message(uuid.UUID(user_id), message, 'user')
@@ -171,7 +179,16 @@ async def send_message(request: Request, message: str = Form(...), video: Option
         return JSONResponse(content={"response": response}, status_code=200)
     except Exception as e:
         logger.error(f"Error in send_message: {str(e)}")
+        logger.error(traceback.format_exc())
         return JSONResponse(content={"error": "An error occurred while processing your request"}, status_code=500)
+
+async def check_user_exists(user_id: str) -> bool:
+    try:
+        response = supabase.table("users").select("id").eq("id", user_id).execute()
+        return len(response.data) > 0
+    except Exception as e:
+        logger.error(f"Error checking user existence: {str(e)}")
+        return False
 
 @app.get("/chat_history")
 async def chat_history(request: Request):

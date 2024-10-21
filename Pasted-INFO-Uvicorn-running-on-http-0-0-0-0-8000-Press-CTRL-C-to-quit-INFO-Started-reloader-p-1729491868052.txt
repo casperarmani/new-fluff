@@ -1,0 +1,48 @@
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [4334] using StatReload
+INFO:app:Redis client initialized successfully
+INFO:app:Redis connection info: {'username': 'default', 'password': '3Fj4RvdtGErTIPi3ORK9tpwD8AFDlRvT', 'host': 'redis-17584.c241.us-east-1-4.ec2.redns.redis-cloud.com', 'port': 17584}
+INFO:app:Testing Redis connection...
+Successfully connected to Redis
+INFO:     Started server process [4383]
+INFO:     Waiting for application startup.
+INFO:     172.31.196.35:51280 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.35:51280 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:     172.31.196.35:51280 - "GET /login HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/auth/v1/token?grant_type=password "HTTP/1.1 200 OK"
+INFO:app:Login process time: 0.87 seconds
+INFO:     172.31.196.35:53664 - "POST /login HTTP/1.1" 200 OK
+INFO:     172.31.196.35:53664 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.35:53664 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:app:Fetching chat history for user: 031883d5-6402-45c8-8977-260fc264694e
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history?select=%2A&user_id=eq.031883d5-6402-45c8-8977-260fc264694e&order=TIMESTAMP.desc&limit=50 "HTTP/1.1 200 OK"
+INFO:database:Chat history retrieved from Supabase for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:database:Supabase get_chat_history time: 1.08 seconds
+INFO:app:Retrieved chat history for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:app:Total chat history processing time: 1.08 seconds
+INFO:     172.31.196.35:53664 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output?select=%2A&user_id=eq.031883d5-6402-45c8-8977-260fc264694e&order=TIMESTAMP.desc&limit=10 "HTTP/1.1 200 OK"
+INFO:database:Video analysis history retrieved from Supabase for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:database:Supabase get_video_analysis_history time: 0.83 seconds
+INFO:app:Retrieved video analysis history for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:app:Total video analysis history processing time: 0.83 seconds
+INFO:     172.31.196.35:46102 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:database:Chat context updated in Redis for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:database:Chat context updated in Redis for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:chatbot:Total message processing time: 3.92 seconds
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.031883d5-6402-45c8-8977-260fc264694e "HTTP/1.1 200 OK"
+ERROR:app:Error in send_message: User with id 031883d5-6402-45c8-8977-260fc264694e does not exist
+INFO:     172.31.196.35:52762 - "POST /send_message HTTP/1.1" 500 Internal Server Error
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output?select=%2A&user_id=eq.031883d5-6402-45c8-8977-260fc264694e&order=TIMESTAMP.desc&limit=10 "HTTP/1.1 200 OK"
+INFO:database:Video analysis history retrieved from Supabase for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:database:Supabase get_video_analysis_history time: 0.74 seconds
+INFO:app:Retrieved video analysis history for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:app:Total video analysis history processing time: 0.74 seconds
+INFO:     172.31.196.35:52762 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:app:Fetching chat history for user: 031883d5-6402-45c8-8977-260fc264694e
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history?select=%2A&user_id=eq.031883d5-6402-45c8-8977-260fc264694e&order=TIMESTAMP.desc&limit=50 "HTTP/1.1 200 OK"
+INFO:database:Chat history retrieved from Supabase for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:database:Supabase get_chat_history time: 0.73 seconds
+INFO:app:Retrieved chat history for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:app:Total chat history processing time: 0.73 seconds
+INFO:     172.31.196.35:52776 - "GET /chat_history HTTP/1.1" 200 OK
