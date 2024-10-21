@@ -3,6 +3,8 @@ import time
 import logging
 import google.generativeai as genai
 from dotenv import load_dotenv
+from database import update_session_context, get_session_context
+import uuid
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -32,22 +34,44 @@ class Chatbot:
             model_name="gemini-1.5-pro-latest",
             generation_config=self.generation_config,
         )
-        self.chat_session = self.model.start_chat(
-            history=[
-                {
-                    "role": "user",
-                    "parts": ["You are a world-class video ads and creative analyzer. You can analyze both text and video content."],
-                },
-                {
-                    "role": "model",
-                    "parts": ["Understood. As a world-class video ads and creative analyzer, I'm ready to provide expert insights on both text and video content. My analysis will cover various aspects such as audience engagement, messaging effectiveness, visual and audio elements, brand consistency, and platform optimization. Whether you have a specific question about an ad or need a comprehensive analysis of a video, I'm here to help. What would you like me to analyze today?"],
-                },
-            ]
-        )
 
-    def send_message(self, message):
+    def send_message(self, message, user_id):
+        start_time = time.time()
+        
+        # Retrieve session context from Redis
+        session_context = get_session_context(uuid.UUID(user_id))
+        
+        if not session_context:
+            # If no session context, start a new chat
+            self.chat_session = self.model.start_chat(
+                history=[
+                    {
+                        "role": "user",
+                        "parts": ["You are a world-class video ads and creative analyzer. You can analyze both text and video content."],
+                    },
+                    {
+                        "role": "model",
+                        "parts": ["Understood. As a world-class video ads and creative analyzer, I'm ready to provide expert insights on both text and video content. My analysis will cover various aspects such as audience engagement, messaging effectiveness, visual and audio elements, brand consistency, and platform optimization. Whether you have a specific question about an ad or need a comprehensive analysis of a video, I'm here to help. What would you like me to analyze today?"],
+                    },
+                ]
+            )
+        else:
+            # If session context exists, restore the chat session
+            self.chat_session = self.model.start_chat(history=session_context.get('history', []))
+
         try:
             response = self.chat_session.send_message(message)
+            
+            # Update session context in Redis
+            session_context = {
+                'history': self.chat_session.history,
+                'last_interaction': time.time()
+            }
+            update_session_context(uuid.UUID(user_id), session_context)
+            
+            processing_time = time.time() - start_time
+            logger.info(f"Total message processing time: {processing_time:.2f} seconds")
+            
             return response.text
         except Exception as e:
             logger.error(f"Error sending message: {str(e)}")
