@@ -1,184 +1,194 @@
 import os
-import time
+from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.security import OAuth2AuthorizationCodeBearer
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
+from chatbot import Chatbot
+from database import create_user, get_user_by_email, insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history, check_user_exists
+from dotenv import load_dotenv
+import uvicorn
+from supabase.client import create_client, Client
 import uuid
 import json
+from redis_config import get_redis_client, test_redis_connection
+import redis
 import logging
 import traceback
-from typing import List, Dict, Optional
-from fastapi import FastAPI, Request, HTTPException, Depends, File, UploadFile, Form
-from fastapi.responses import JSONResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
-from starlette.middleware.sessions import SessionMiddleware
-import uvicorn
-from supabase import create_client, Client
-from database import (
-    get_user_by_email,
-    insert_chat_message,
-    get_chat_history,
-    insert_video_analysis,
-    get_video_analysis_history,
-    create_user,
-    get_recent_chat_context,
-    update_chat_context
-)
-from chatbot import Chatbot
-from redis_config import get_redis_client, test_redis_connection
+import time
 
-# Set up logging
+load_dotenv()
+
+app = FastAPI()
+chatbot = Chatbot()
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+os.makedirs(static_dir, exist_ok=True)
 
-# Add session middleware
-app.add_middleware(SessionMiddleware, secret_key="your-secret-key")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY"))
 
-# Set up Jinja2 templates
-templates = Jinja2Templates(directory="templates")
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_ANON_KEY")
 
-# Initialize Supabase client
-supabase: Client = create_client(
-    os.environ.get("SUPABASE_URL"),
-    os.environ.get("SUPABASE_ANON_KEY")
-)
+if not supabase_url or not supabase_key:
+    raise ValueError("SUPABASE_URL or SUPABASE_ANON_KEY is missing from environment variables")
 
-# Initialize Redis client
-redis_client = get_redis_client()
-if redis_client:
-    logger.info("Redis client initialized successfully")
-    logger.info(f"Redis connection info: {redis_client.connection_pool.connection_kwargs}")
-    logger.info("Testing Redis connection...")
-    test_redis_connection()
-else:
-    logger.warning("Redis client not initialized")
+supabase: Client = create_client(supabase_url, supabase_key)
 
-# Initialize Chatbot
-chatbot = Chatbot()
+redis_client = None
 
-class LoginForm(BaseModel):
-    email: str
-    password: str
-
-class SignupForm(BaseModel):
-    email: str
-    password: str
+@app.on_event("startup")
+async def startup_event():
+    global redis_client
+    try:
+        redis_client = get_redis_client()
+        if redis_client:
+            logger.info("Redis client initialized successfully")
+            logger.info(f"Redis connection info: {redis_client.connection_pool.connection_kwargs}")
+            logger.info("Testing Redis connection...")
+            if test_redis_connection():
+                logger.info("Redis connection test passed")
+            else:
+                logger.warning("Redis connection test failed")
+        else:
+            logger.warning("Failed to initialize Redis client")
+    except Exception as e:
+        logger.error(f"Error during Redis initialization: {str(e)}")
 
 def get_current_user(request: Request):
-    session = request.session
-    user_id = session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return {"id": user_id}
+    user = request.session.get('user')
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
 
 @app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+async def index(request: Request):
+    user = request.session.get('user')
+    with open("templates/index.html", "r") as f:
+        html_content = f.read()
+    if user:
+        html_content = html_content.replace("<!-- USER_INFO -->", f"<p>Welcome, {user['email']}! <a href='/logout'>Logout</a></p>")
+    else:
+        html_content = html_content.replace("<!-- USER_INFO -->", "<p><a href='/login'>Login</a> | <a href='/signup'>Sign Up</a></p>")
+    return HTMLResponse(content=html_content)
 
-@app.get("/login", response_class=HTMLResponse)
+@app.get('/login', response_class=HTMLResponse)
 async def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    with open("templates/login.html", "r") as f:
+        return HTMLResponse(content=f.read())
 
-@app.get("/signup", response_class=HTMLResponse)
-async def signup_page(request: Request):
-    return templates.TemplateResponse("signup.html", {"request": request})
-
-@app.post("/signup")
-async def signup(form_data: SignupForm):
+@app.post('/login')
+async def login_post(request: Request, email: str = Form(...), password: str = Form(...)):
     try:
-        response = supabase.auth.sign_up({
-            "email": form_data.email,
-            "password": form_data.password
-        })
+        response = supabase.auth.sign_in_with_password({"email": email, "password": password})
         user = response.user
-        if user:
-            create_user(form_data.email)
-            return JSONResponse(content={"success": True, "message": "Signup successful"}, status_code=200)
+        if user and user.email:
+            db_user = get_user_by_email(user.email)
+            request.session['user'] = {
+                'id': str(db_user['id']),
+                'email': user.email,
+            }
+            return JSONResponse({
+                "success": True,
+                "message": "Login successful",
+                "user": {
+                    "id": str(db_user['id']),
+                    "email": user.email
+                }
+            })
         else:
-            return JSONResponse(content={"success": False, "message": "Signup failed"}, status_code=400)
+            raise ValueError("Invalid user data received from Supabase")
     except Exception as e:
-        logger.error(f"Error during signup: {str(e)}")
-        return JSONResponse(content={"success": False, "message": "An error occurred during signup"}, status_code=500)
+        return JSONResponse({"success": False, "message": str(e)}, status_code=400)
 
-@app.post("/login")
-async def login(form_data: LoginForm, request: Request):
+@app.get('/signup', response_class=HTMLResponse)
+async def signup_page(request: Request):
+    with open("templates/signup.html", "r") as f:
+        return HTMLResponse(content=f.read())
+
+@app.post('/signup')
+async def signup_post(request: Request, email: str = Form(...), password: str = Form(...)):
     try:
-        start_time = time.time()
-        response = supabase.auth.sign_in_with_password({
-            "email": form_data.email,
-            "password": form_data.password
-        })
-        session = response.session
-        if session:
-            # Store user ID in session
-            request.session["user_id"] = str(session.user.id)
-            end_time = time.time()
-            logger.info(f"Login process time: {end_time - start_time:.2f} seconds")
-            return JSONResponse(content={"success": True, "message": "Login successful"}, status_code=200)
+        response = supabase.auth.sign_up({"email": email, "password": password})
+        user = response.user
+        if user and user.email:
+            db_user = create_user(user.email)
+            request.session['user'] = {
+                'id': str(db_user['id']),
+                'email': user.email,
+            }
+            return JSONResponse({"success": True, "message": "Signup successful"})
         else:
-            return JSONResponse(content={"success": False, "message": "Invalid credentials"}, status_code=401)
+            return JSONResponse({"success": False, "message": "Signup failed"}, status_code=400)
     except Exception as e:
-        logger.error(f"Login error: {str(e)}")
-        logger.error(traceback.format_exc())
-        return JSONResponse(content={"success": False, "message": "An error occurred during login"}, status_code=400)
+        return JSONResponse({"success": False, "message": str(e)}, status_code=400)
 
-@app.post("/logout")
+@app.post('/logout')
 async def logout(request: Request):
-    request.session.clear()
-    return {"success": True}
+    request.session.pop('user', None)
+    return JSONResponse({"success": True, "message": "Logout successful"})
 
 @app.get("/auth_status")
 async def auth_status(request: Request):
-    user_id = request.session.get("user_id")
-    return {"authenticated": user_id is not None}
+    user = request.session.get('user')
+    return {"authenticated": user is not None}
 
 @app.post("/send_message")
-async def send_message(request: Request, message: str = Form(...), video: Optional[UploadFile] = File(None)):
-    start_time = time.time()
-    try:
-        current_user = get_current_user(request)
-        user_id = current_user["id"]
-
-        if video:
-            # Handle video upload and analysis
-            file_location = f"temp/{video.filename}"
-            with open(file_location, "wb+") as file_object:
-                file_object.write(video.file.read())
-            
-            analysis_result = chatbot.analyze_video(file_location)
-            insert_video_analysis(uuid.UUID(user_id), video.filename, analysis_result)
-            os.remove(file_location)
-            response = analysis_result
-        else:
-            # Handle text message
-            response = chatbot.send_message(message, user_id)
-
-        # Insert user message and bot response into chat history
-        insert_chat_message(uuid.UUID(user_id), message, 'user')
-        insert_chat_message(uuid.UUID(user_id), response, 'bot')
-
-        # Update chat context in Redis
-        update_chat_context(uuid.UUID(user_id), {"role": "user", "message": message})
-        update_chat_context(uuid.UUID(user_id), {"role": "model", "message": response})
-
-        end_time = time.time()
-        logger.info(f"Total send_message processing time: {end_time - start_time:.2f} seconds")
+async def send_message(
+    request: Request,
+    message: str = Form(""),
+    video: UploadFile = File(None)
+):
+    current_user = get_current_user(request)
+    user_id = uuid.UUID(current_user['id'])
+    
+    if not check_user_exists(user_id):
+        raise HTTPException(status_code=400, detail="User does not exist")
+    
+    if video:
+        video_path = os.path.join('temp', video.filename)
+        os.makedirs('temp', exist_ok=True)
+        with open(video_path, "wb") as buffer:
+            content = await video.read()
+            buffer.write(content)
         
-        return JSONResponse(content={"response": response}, status_code=200)
-    except Exception as e:
-        logger.error(f"Error in send_message: {str(e)}")
-        return JSONResponse(content={"error": "An error occurred while processing your request"}, status_code=500)
+        analysis_result = chatbot.analyze_video(video_path, message)
+        os.remove(video_path)
+        
+        insert_video_analysis(user_id, video.filename, analysis_result)
+        if redis_client:
+            try:
+                redis_client.delete(f"video_analysis_history:{user_id}")
+            except redis.exceptions.ConnectionError:
+                logger.error("Failed to invalidate video analysis cache due to Redis connection error")
+        return {"response": analysis_result}
+    else:
+        response = chatbot.send_message(message)
+        insert_chat_message(user_id, message, 'text')
+        insert_chat_message(user_id, response, 'bot')
+        if redis_client:
+            try:
+                redis_client.delete(f"chat_history:{user_id}")
+            except redis.exceptions.ConnectionError:
+                logger.error("Failed to invalidate chat history cache due to Redis connection error")
+        return {"response": response}
 
 @app.get("/chat_history")
 async def chat_history(request: Request):
     start_time = time.time()
     try:
         current_user = get_current_user(request)
-        user_id = current_user["id"]
+        user_id = current_user['id']
         
         logger.info(f"Fetching chat history for user: {user_id}")
         
@@ -189,13 +199,30 @@ async def chat_history(request: Request):
                 logger.error(f"Invalid user_id format: {user_id}")
                 return JSONResponse({"error": "Invalid user ID format"}, status_code=400)
         
-        try:
-            history = get_chat_history(user_id)
-            logger.info(f"Retrieved chat history for user {user_id}")
-        except Exception as db_error:
-            logger.error(f"Database error while fetching chat history: {str(db_error)}")
-            logger.error(traceback.format_exc())
-            return JSONResponse({"error": "Error fetching chat history from database"}, status_code=500)
+        if redis_client:
+            try:
+                cached_history = redis_client.get(f"chat_history:{user_id}")
+                if cached_history:
+                    history = json.loads(cached_history)
+                    logger.info(f"Retrieved chat history for user {user_id} from Redis cache")
+                    end_time = time.time()
+                    logger.info(f"Total chat history processing time: {end_time - start_time:.2f} seconds")
+                    return {"history": history}
+            except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError) as e:
+                logger.warning(f"Redis error: {str(e)}. Falling back to database.")
+            except json.JSONDecodeError as e:
+                logger.error(f"Error decoding cached chat history: {str(e)}")
+        
+        logger.info(f"Fetching chat history from database for user: {user_id}")
+        history = get_chat_history(user_id)
+        logger.info(f"Retrieved chat history for user {user_id} from database")
+        
+        if redis_client:
+            try:
+                redis_client.setex(f"chat_history:{user_id}", 300, json.dumps(history))
+                logger.info(f"Cached chat history for user {user_id} in Redis")
+            except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError) as e:
+                logger.warning(f"Failed to cache chat history: {str(e)}")
         
         end_time = time.time()
         logger.info(f"Total chat history processing time: {end_time - start_time:.2f} seconds")
@@ -208,25 +235,37 @@ async def chat_history(request: Request):
         logger.error(traceback.format_exc())
         end_time = time.time()
         logger.error(f"Error occurred after {end_time - start_time:.2f} seconds")
-        return JSONResponse({"error": "An unexpected error occurred", "details": str(e)}, status_code=500)
+        return JSONResponse({"error": "An unexpected error occurred"}, status_code=500)
 
 @app.get("/video_analysis_history")
 async def video_analysis_history(request: Request):
-    start_time = time.time()
+    current_user = get_current_user(request)
+    user_id = uuid.UUID(current_user['id'])
+    
     try:
-        current_user = get_current_user(request)
-        user_id = uuid.UUID(current_user["id"])
+        if redis_client:
+            try:
+                cached_history = redis_client.get(f"video_analysis_history:{user_id}")
+                if cached_history:
+                    history = json.loads(cached_history)
+                    logger.info(f"Retrieved video analysis history for user {user_id} from Redis cache")
+                    return {"history": history}
+            except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError, json.JSONDecodeError) as e:
+                logger.warning(f"Redis error: {str(e)}. Falling back to database.")
         
         history = get_video_analysis_history(user_id)
-        logger.info(f"Retrieved video analysis history for user {user_id}")
+        logger.info(f"Retrieved video analysis history for user {user_id} from database")
         
-        end_time = time.time()
-        logger.info(f"Total video analysis history processing time: {end_time - start_time:.2f} seconds")
+        if redis_client:
+            try:
+                redis_client.setex(f"video_analysis_history:{user_id}", 300, json.dumps(history))
+            except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError) as e:
+                logger.warning(f"Failed to cache video analysis history: {str(e)}")
+        
         return {"history": history}
     except Exception as e:
         logger.error(f"Error in video_analysis_history endpoint: {str(e)}")
-        logger.error(traceback.format_exc())
-        return JSONResponse({"error": "Internal Server Error", "details": str(e)}, status_code=500)
+        return JSONResponse({"error": "Internal Server Error"}, status_code=500)
 
 if __name__ == '__main__':
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

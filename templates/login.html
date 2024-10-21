@@ -12,10 +12,10 @@
         <h1 class="mb-4">Login</h1>
         <form id="login-form">
             <div class="mb-3">
-                <input type="email" id="email" name="email" class="form-control" placeholder="Email" required>
+                <input type="email" name="email" class="form-control" placeholder="Email" required>
             </div>
             <div class="mb-3">
-                <input type="password" id="password" name="password" class="form-control" placeholder="Password" required>
+                <input type="password" name="password" class="form-control" placeholder="Password" required>
             </div>
             <button type="submit" class="btn btn-primary">
                 <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
@@ -33,16 +33,11 @@
             spinner.classList.remove('d-none');
             submitButton.disabled = true;
 
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-
+            const formData = new FormData(this);
             try {
                 const response = await fetch('/login', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ email, password })
+                    body: formData
                 });
                 const data = await response.json();
                 if (data.success) {

@@ -3,8 +3,6 @@ import time
 import logging
 import google.generativeai as genai
 from dotenv import load_dotenv
-from database import get_recent_chat_context, update_chat_context
-import uuid
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -34,40 +32,22 @@ class Chatbot:
             model_name="gemini-1.5-pro-latest",
             generation_config=self.generation_config,
         )
+        self.chat_session = self.model.start_chat(
+            history=[
+                {
+                    "role": "user",
+                    "parts": ["You are a world-class video ads and creative analyzer. You can analyze both text and video content."],
+                },
+                {
+                    "role": "model",
+                    "parts": ["Understood. As a world-class video ads and creative analyzer, I'm ready to provide expert insights on both text and video content. My analysis will cover various aspects such as audience engagement, messaging effectiveness, visual and audio elements, brand consistency, and platform optimization. Whether you have a specific question about an ad or need a comprehensive analysis of a video, I'm here to help. What would you like me to analyze today?"],
+                },
+            ]
+        )
 
-    def send_message(self, message: str, user_id: str):
-        start_time = time.time()
-        
-        # Retrieve recent chat context from Redis
-        recent_context = get_recent_chat_context(uuid.UUID(user_id))
-        
-        # Prepare the chat history
-        chat_history = [
-            {"role": "user", "parts": ["You are a world-class video ads and creative analyzer. You can analyze both text and video content."]},
-            {"role": "model", "parts": ["Understood. As a world-class video ads and creative analyzer, I'm ready to provide expert insights on both text and video content. My analysis will cover various aspects such as audience engagement, messaging effectiveness, visual and audio elements, brand consistency, and platform optimization. Whether you have a specific question about an ad or need a comprehensive analysis of a video, I'm here to help. What would you like me to analyze today?"]},
-        ]
-        
-        # Add recent context to chat history
-        for ctx in recent_context:
-            chat_history.append({"role": ctx["role"], "parts": [ctx["message"]]})
-        
-        # Add the current user message
-        chat_history.append({"role": "user", "parts": [message]})
-        
+    def send_message(self, message):
         try:
-            # Start a new chat session with the prepared history
-            chat = self.model.start_chat(history=chat_history)
-            
-            # Send the message and get the response
-            response = chat.send_message(message)
-            
-            # Update the chat context in Redis
-            update_chat_context(uuid.UUID(user_id), {"role": "user", "message": message})
-            update_chat_context(uuid.UUID(user_id), {"role": "model", "message": response.text})
-            
-            processing_time = time.time() - start_time
-            logger.info(f"Total message processing time: {processing_time:.2f} seconds")
-            
+            response = self.chat_session.send_message(message)
             return response.text
         except Exception as e:
             logger.error(f"Error sending message: {str(e)}")
