@@ -3,9 +3,10 @@ import logging
 from supabase import create_client, Client
 from typing import List, Dict, Optional
 import uuid
-from redis_config import get_redis_client, CHAT_SESSION_TTL, cache_get, cache_set, write_through_cache
+from redis_config import get_redis_client, CHAT_SESSION_TTL
 import json
 import asyncio
+from datetime import datetime
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -45,7 +46,7 @@ def check_user_exists(user_id: uuid.UUID) -> bool:
         logger.error(f"Error checking if user exists: {str(e)}")
         raise
 
-async def async_insert_chat_message(user_id: uuid.UUID, message: str, chat_type: str = 'text') -> Dict:
+def async_insert_chat_message(user_id: uuid.UUID, message: str, chat_type: str = 'text') -> Dict:
     user_exists = check_user_exists(user_id)
     if not user_exists:
         raise ValueError(f"User with id {user_id} does not exist")
@@ -54,18 +55,16 @@ async def async_insert_chat_message(user_id: uuid.UUID, message: str, chat_type:
             "user_id": str(user_id),
             "message": message,
             "chat_type": chat_type,
-            "TIMESTAMP": "CURRENT_TIMESTAMP"
+            "TIMESTAMP": datetime.now().isoformat()
         }
         
         cache_key = f"chat_history:{user_id}"
         
-        async def db_write_func(value):
-            return await asyncio.to_thread(
-                supabase.table("user_chat_history").insert(value).execute
-            )
+        def db_write_func(value):
+            return supabase.table("user_chat_history").insert(value).execute()
         
         # Use write-through cache
-        await write_through_cache(cache_key, new_message, db_write_func)
+        write_through_cache(cache_key, new_message, db_write_func)
         
         logger.info(f"Successfully inserted chat message for user {user_id}")
         return new_message
@@ -73,21 +72,19 @@ async def async_insert_chat_message(user_id: uuid.UUID, message: str, chat_type:
         logger.error(f"Error inserting chat message: {str(e)}")
         raise
 
-async def get_chat_history(user_id: uuid.UUID, limit: int = 50) -> List[Dict]:
+def get_chat_history(user_id: uuid.UUID, limit: int = 50) -> List[Dict]:
     try:
         cache_key = f"chat_history:{user_id}"
-        cached_history = await cache_get(cache_key)
+        cached_history = cache_get(cache_key)
         if cached_history:
             logger.info(f"Retrieved chat history for user {user_id} from Redis cache")
             return cached_history[:limit]
         
-        response = await asyncio.to_thread(
-            supabase.table("user_chat_history").select("*").eq("user_id", str(user_id)).order("TIMESTAMP", desc=True).limit(limit).execute
-        )
+        response = supabase.table("user_chat_history").select("*").eq("user_id", str(user_id)).order("TIMESTAMP", desc=True).limit(limit).execute()
         history = response.data
         
         # Update Redis cache
-        await cache_set(cache_key, history, CHAT_SESSION_TTL)
+        cache_set(cache_key, history, CHAT_SESSION_TTL)
         
         logger.info(f"Retrieved chat history for user {user_id} from database")
         return history
@@ -95,7 +92,7 @@ async def get_chat_history(user_id: uuid.UUID, limit: int = 50) -> List[Dict]:
         logger.error(f"Error getting chat history: {str(e)}")
         raise
 
-async def insert_video_analysis(user_id: uuid.UUID, upload_file_name: str, analysis: str, video_duration: Optional[str] = None, video_format: Optional[str] = None) -> Dict:
+def insert_video_analysis(user_id: uuid.UUID, upload_file_name: str, analysis: str, video_duration: Optional[str] = None, video_format: Optional[str] = None) -> Dict:
     try:
         new_analysis = {
             "user_id": str(user_id),
@@ -103,18 +100,16 @@ async def insert_video_analysis(user_id: uuid.UUID, upload_file_name: str, analy
             "analysis": analysis,
             "video_duration": video_duration,
             "video_format": video_format,
-            "TIMESTAMP": "CURRENT_TIMESTAMP"
+            "TIMESTAMP": datetime.now().isoformat()
         }
         
         cache_key = f"video_analysis_history:{user_id}"
         
-        async def db_write_func(value):
-            return await asyncio.to_thread(
-                supabase.table("video_analysis_output").insert(value).execute
-            )
+        def db_write_func(value):
+            return supabase.table("video_analysis_output").insert(value).execute()
         
         # Use write-through cache
-        await write_through_cache(cache_key, new_analysis, db_write_func)
+        write_through_cache(cache_key, new_analysis, db_write_func)
         
         logger.info(f"Successfully inserted video analysis for user {user_id}")
         return new_analysis
@@ -122,24 +117,54 @@ async def insert_video_analysis(user_id: uuid.UUID, upload_file_name: str, analy
         logger.error(f"Error inserting video analysis: {str(e)}")
         raise
 
-async def get_video_analysis_history(user_id: uuid.UUID, limit: int = 10) -> List[Dict]:
+def get_video_analysis_history(user_id: uuid.UUID, limit: int = 10) -> List[Dict]:
     try:
         cache_key = f"video_analysis_history:{user_id}"
-        cached_history = await cache_get(cache_key)
+        cached_history = cache_get(cache_key)
         if cached_history:
             logger.info(f"Retrieved video analysis history for user {user_id} from Redis cache")
             return cached_history[:limit]
         
-        response = await asyncio.to_thread(
-            supabase.table("video_analysis_output").select("*").eq("user_id", str(user_id)).order("TIMESTAMP", desc=True).limit(limit).execute
-        )
+        response = supabase.table("video_analysis_output").select("*").eq("user_id", str(user_id)).order("TIMESTAMP", desc=True).limit(limit).execute()
         history = response.data
         
         # Update Redis cache
-        await cache_set(cache_key, history, CHAT_SESSION_TTL)
+        cache_set(cache_key, history, CHAT_SESSION_TTL)
         
         logger.info(f"Retrieved video analysis history for user {user_id} from database")
         return history
     except Exception as e:
         logger.error(f"Error getting video analysis history: {str(e)}")
         raise
+
+def cache_set(key, value, ttl=CHAT_SESSION_TTL):
+    try:
+        redis_client.setex(key, ttl, json.dumps(value))
+    except Exception as e:
+        logger.error(f"Error setting cache: {str(e)}")
+
+def cache_get(key):
+    try:
+        value = redis_client.get(key)
+        return json.loads(value) if value else None
+    except Exception as e:
+        logger.error(f"Error getting cache: {str(e)}")
+        return None
+
+def cache_delete(key):
+    try:
+        redis_client.delete(key)
+    except Exception as e:
+        logger.error(f"Error deleting cache: {str(e)}")
+
+def write_through_cache(key, value, db_write_func, ttl=CHAT_SESSION_TTL):
+    try:
+        # Update cache
+        cache_set(key, value, ttl)
+        
+        # Write to database
+        db_write_func(value)
+    except Exception as e:
+        logger.error(f"Error in write-through cache: {str(e)}")
+        # If there's an error, invalidate the cache
+        cache_delete(key)
