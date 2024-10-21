@@ -36,7 +36,9 @@ DB_WRITE_BATCH_SIZE = 10
 async def cache_set(key, value, ttl=CHAT_SESSION_TTL):
     redis_client = get_redis_client()
     try:
-        await redis_client.setex(key, ttl, json.dumps(value))
+        if isinstance(value, dict):
+            value = json.dumps(value)
+        await redis_client.setex(key, ttl, value)
     except Exception as e:
         logger.error(f"Error setting cache: {str(e)}")
 
@@ -60,7 +62,11 @@ async def cache_delete(key):
 async def write_through_cache(key, value, db_write_func, ttl=CHAT_SESSION_TTL):
     try:
         # Update cache
-        await cache_set(key, value, ttl)
+        if isinstance(value, dict):
+            cache_value = json.dumps(value)
+        else:
+            cache_value = value
+        await cache_set(key, cache_value, ttl)
         
         # Write to database
         await db_write_func(value)

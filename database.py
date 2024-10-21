@@ -6,6 +6,7 @@ import uuid
 from redis_config import get_redis_client, CHAT_SESSION_TTL, cache_get, cache_set, write_through_cache
 import json
 import asyncio
+from datetime import datetime, timezone
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -54,7 +55,7 @@ async def async_insert_chat_message(user_id: uuid.UUID, message: str, chat_type:
             "user_id": str(user_id),
             "message": message,
             "chat_type": chat_type,
-            "TIMESTAMP": "CURRENT_TIMESTAMP"
+            "TIMESTAMP": datetime.now(timezone.utc).isoformat()
         }
         
         cache_key = f"chat_history:{user_id}"
@@ -87,7 +88,7 @@ async def get_chat_history(user_id: uuid.UUID, limit: int = 50) -> List[Dict]:
         history = response.data
         
         # Update Redis cache
-        await cache_set(cache_key, history, CHAT_SESSION_TTL)
+        await cache_set(cache_key, json.dumps(history), CHAT_SESSION_TTL)
         
         logger.info(f"Retrieved chat history for user {user_id} from database")
         return history
@@ -103,7 +104,7 @@ async def insert_video_analysis(user_id: uuid.UUID, upload_file_name: str, analy
             "analysis": analysis,
             "video_duration": video_duration,
             "video_format": video_format,
-            "TIMESTAMP": "CURRENT_TIMESTAMP"
+            "TIMESTAMP": datetime.now(timezone.utc).isoformat()
         }
         
         cache_key = f"video_analysis_history:{user_id}"
@@ -136,7 +137,7 @@ async def get_video_analysis_history(user_id: uuid.UUID, limit: int = 10) -> Lis
         history = response.data
         
         # Update Redis cache
-        await cache_set(cache_key, history, CHAT_SESSION_TTL)
+        await cache_set(cache_key, json.dumps(history), CHAT_SESSION_TTL)
         
         logger.info(f"Retrieved video analysis history for user {user_id} from database")
         return history
