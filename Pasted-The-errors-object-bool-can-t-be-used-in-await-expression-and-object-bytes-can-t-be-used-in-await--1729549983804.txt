@@ -1,0 +1,136 @@
+The errors object bool can't be used in 'await' expression and object bytes can't be used in 'await' expression point towards issues with the use of await in your Redis caching implementation. Specifically, this indicates an improper use of async/await syntax when working with a synchronous Redis client.
+
+Here’s what’s likely happening:
+
+Using await with Synchronous Methods:
+
+These errors indicate that you're trying to use await on a method that is not a coroutine (i.e., it does not use asynchronous I/O).
+For instance, you might be trying to await a Redis operation where you're using a synchronous Redis client.
+Bytes Data Type Error:
+
+The error object bytes can't be used in 'await' expression suggests that some Redis methods return data in bytes, and they are being incorrectly handled or awaited.
+To resolve these issues, consider the following steps:
+
+Step-by-Step Solution
+1. Ensure You Are Using an Async Redis Client
+If you are using a synchronous Redis client (e.g., redis-py), the methods for setting and getting data are blocking, meaning they cannot be awaited.
+To integrate Redis in an asynchronous framework (e.g., FastAPI), you should use aioredis, which provides asynchronous methods compatible with await.
+Update the Redis Client Initialization:
+
+Replace redis-py with aioredis to ensure all Redis operations are non-blocking.
+python
+Copy code
+import aioredis
+import os
+
+async def get_redis_client():
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        raise ValueError("REDIS_URL environment variable is not set")
+    return await aioredis.from_url(redis_url, decode_responses=True)
+With aioredis, you can now use await for all Redis operations.
+2. Modify Redis Set and Get Operations
+Since you are using async/await, make sure you are handling Redis operations appropriately.
+Example of Correct Async Usage:
+
+python
+Copy code
+import json
+import aioredis
+
+async def set_cache(redis_client, key, value, ttl=3600):
+    try:
+        await redis_client.setex(key, ttl, json.dumps(value))
+    except Exception as e:
+        logger.error(f"Error setting cache: {str(e)}")
+
+async def get_cache(redis_client, key):
+    try:
+        value = await redis_client.get(key)
+        if value:
+            return json.loads(value)
+    except Exception as e:
+        logger.error(f"Error getting cache: {str(e)}")
+    return None
+3. Refactor Cache Handling Functions
+Update functions in your redis_config.py file to use async methods.
+Example Update:
+
+python
+Copy code
+import aioredis
+import os
+
+async def get_redis_client():
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        raise ValueError("REDIS_URL environment variable is not set")
+    return await aioredis.from_url(redis_url, decode_responses=True)
+
+async def set_cache(key, value, ttl=3600):
+    redis_client = await get_redis_client()
+    try:
+        await redis_client.setex(key, ttl, value)
+        print("Cache set successfully")
+    except Exception as e:
+        logger.error(f"Error setting cache: {str(e)}")
+
+async def get_cache(key):
+    redis_client = await get_redis_client()
+    try:
+        result = await redis_client.get(key)
+        return result
+    except Exception as e:
+        logger.error(f"Error getting cache: {str(e)}")
+        return None
+4. Avoid Mixing Synchronous and Asynchronous Code
+Do not use await on synchronous code, such as redis-py methods. These will block the event loop and result in runtime errors.
+Ensure all Redis methods are async by using the correct client (aioredis).
+5. Testing the Solution
+After changing to aioredis, make sure to test:
+Set and Get Operations: Write test functions to validate that cache operations work asynchronously and without blocking.
+Function Calls: Wherever you call Redis cache functions, use await, since all functions should now be asynchronous.
+Example of Correct Usage in Your Main Application (app.py)
+Update Redis usage in app.py to be fully asynchronous:
+
+python
+Copy code
+from fastapi import FastAPI
+import asyncio
+
+app = FastAPI()
+
+# Async Redis client initialization
+redis_client = None
+
+@app.on_event("startup")
+async def startup_event():
+    global redis_client
+    redis_client = await get_redis_client()  # Use async initialization
+
+@app.post("/send_message")
+async def send_message(user_id: str, message: str):
+    # Set cache asynchronously
+    redis_key = f"chat_session:{user_id}"
+    chat_session = await get_cache(redis_key)
+    if chat_session:
+        chat_session = json.loads(chat_session)
+    else:
+        chat_session = []
+
+    chat_session.append({"user": message})
+    await set_cache(redis_key, json.dumps(chat_session))  # Set with await
+
+    # Generate a response (using Gemini, etc.)
+    response = "Your generated response"
+
+    # Add bot response to the session
+    chat_session.append({"bot": response})
+    await set_cache(redis_key, json.dumps(chat_session))  # Set with await
+
+    return {"response": response}
+Summary
+Use aioredis: Replace redis-py with aioredis to support async operations.
+Refactor Functions to Use Async: Modify all Redis cache functions to use async/await appropriately.
+Avoid Awaiting Synchronous Code: Ensure you are not using await on synchronous methods. This will throw the object bool/bytes can't be used in 'await' expression errors.
+Test: Validate that your cache set and get functions are now working asynchronously without blocking errors.

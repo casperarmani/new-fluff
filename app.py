@@ -13,7 +13,6 @@ from supabase.client import create_client, Client
 import uuid
 import json
 from redis_config import get_redis_client, test_redis_connection, CHAT_SESSION_TTL
-import redis
 import logging
 import traceback
 import time
@@ -49,10 +48,10 @@ redis_client = None
 async def startup_event():
     global redis_client
     try:
-        redis_client = get_redis_client()
+        redis_client = await get_redis_client()
         if redis_client:
             logger.info("Redis client initialized successfully")
-            if test_redis_connection():
+            if await test_redis_connection():
                 logger.info("Redis connection test passed")
             else:
                 logger.warning("Redis connection test failed")
@@ -93,7 +92,7 @@ async def login_post(request: Request, email: str = Form(...), password: str = F
         response = supabase.auth.sign_in_with_password({"email": email, "password": password})
         user = response.user
         if user and user.email:
-            db_user = get_user_by_email(user.email)
+            db_user = await get_user_by_email(user.email)
             request.session['user'] = {
                 'id': str(db_user['id']),
                 'email': user.email,
@@ -122,7 +121,7 @@ async def signup_post(request: Request, email: str = Form(...), password: str = 
         response = supabase.auth.sign_up({"email": email, "password": password})
         user = response.user
         if user and user.email:
-            db_user = create_user(user.email)
+            db_user = await create_user(user.email)
             request.session['user'] = {
                 'id': str(db_user['id']),
                 'email': user.email,
@@ -153,7 +152,7 @@ async def send_message(
     current_user = get_current_user(request)
     user_id = uuid.UUID(current_user['id'])
     
-    if not check_user_exists(user_id):
+    if not await check_user_exists(user_id):
         raise HTTPException(status_code=400, detail="User does not exist")
     
     if video:
