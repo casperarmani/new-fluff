@@ -6,7 +6,7 @@ from fastapi.security import OAuth2AuthorizationCodeBearer
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from chatbot import Chatbot
-from database import create_user, get_user_by_email, insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history, check_user_exists
+from database import create_user, get_user_by_email, async_insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history, check_user_exists
 from dotenv import load_dotenv
 import uvicorn
 from supabase.client import create_client, Client
@@ -17,6 +17,7 @@ import redis
 import logging
 import traceback
 import time
+import asyncio
 
 load_dotenv()
 
@@ -50,8 +51,6 @@ async def startup_event():
         redis_client = get_redis_client()
         if redis_client:
             logger.info("Redis client initialized successfully")
-            logger.info(f"Redis connection info: {redis_client.connection_pool.connection_kwargs}")
-            logger.info("Testing Redis connection...")
             if test_redis_connection():
                 logger.info("Redis connection test passed")
             else:
@@ -174,13 +173,8 @@ async def send_message(
         return {"response": analysis_result}
     else:
         response = chatbot.send_message(message)
-        insert_chat_message(user_id, message, 'text')
-        insert_chat_message(user_id, response, 'bot')
-        if redis_client:
-            try:
-                redis_client.delete(f"chat_history:{user_id}")
-            except redis.exceptions.ConnectionError:
-                logger.error("Failed to invalidate chat history cache due to Redis connection error")
+        await async_insert_chat_message(user_id, message, 'text')
+        await async_insert_chat_message(user_id, response, 'bot')
         return {"response": response}
 
 @app.get("/chat_history")
@@ -188,48 +182,15 @@ async def chat_history(request: Request):
     start_time = time.time()
     try:
         current_user = get_current_user(request)
-        user_id = current_user['id']
+        user_id = uuid.UUID(current_user['id'])
         
         logger.info(f"Fetching chat history for user: {user_id}")
         
-        if not isinstance(user_id, uuid.UUID):
-            try:
-                user_id = uuid.UUID(user_id)
-            except ValueError:
-                logger.error(f"Invalid user_id format: {user_id}")
-                return JSONResponse({"error": "Invalid user ID format"}, status_code=400)
-        
-        if redis_client:
-            try:
-                cached_history = redis_client.get(f"chat_history:{user_id}")
-                if cached_history:
-                    history = json.loads(cached_history)
-                    logger.info(f"Retrieved chat history for user {user_id} from Redis cache")
-                    end_time = time.time()
-                    logger.info(f"Total chat history processing time: {end_time - start_time:.2f} seconds")
-                    return {"history": history}
-            except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError) as e:
-                logger.warning(f"Redis error: {str(e)}. Falling back to database.")
-            except json.JSONDecodeError as e:
-                logger.error(f"Error decoding cached chat history: {str(e)}")
-        
-        logger.info(f"Fetching chat history from database for user: {user_id}")
         history = get_chat_history(user_id)
-        logger.info(f"Retrieved chat history for user {user_id} from database")
-        
-        if redis_client:
-            try:
-                redis_client.setex(f"chat_history:{user_id}", 300, json.dumps(history))
-                logger.info(f"Cached chat history for user {user_id} in Redis")
-            except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError) as e:
-                logger.warning(f"Failed to cache chat history: {str(e)}")
         
         end_time = time.time()
         logger.info(f"Total chat history processing time: {end_time - start_time:.2f} seconds")
         return {"history": history}
-    except HTTPException as he:
-        logger.error(f"HTTP Exception in chat_history: {str(he)}")
-        raise he
     except Exception as e:
         logger.error(f"Unexpected error in chat_history endpoint: {str(e)}")
         logger.error(traceback.format_exc())

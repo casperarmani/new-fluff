@@ -12,18 +12,13 @@ supabase: Client = create_client(supabase_url, supabase_key)
 
 def update_schema():
     schema_updates = [
-        "ALTER TABLE users ALTER COLUMN id TYPE uuid USING (id::uuid);",
-        "ALTER TABLE user_chat_history ALTER COLUMN user_id TYPE uuid USING (user_id::uuid);",
-        "ALTER TABLE video_analysis_output ALTER COLUMN user_id TYPE uuid USING (user_id::uuid);",
-        "ALTER TABLE user_chat_history DROP CONSTRAINT IF EXISTS user_chat_history_user_id_fkey;",
-        "ALTER TABLE user_chat_history ADD CONSTRAINT user_chat_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;",
-        "ALTER TABLE video_analysis_output DROP CONSTRAINT IF EXISTS video_analysis_output_user_id_fkey;",
-        "ALTER TABLE video_analysis_output ADD CONSTRAINT video_analysis_output_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;"
+        "ALTER TABLE user_chat_history ADD COLUMN IF NOT EXISTS timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;",
+        "ALTER TABLE video_analysis_output ADD COLUMN IF NOT EXISTS timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;",
     ]
 
     for sql in schema_updates:
         try:
-            response = supabase.postgrest.rpc('rpc_query', {'query': sql})
+            response = supabase.rpc('execute_sql', {'query': sql}).execute()
             print(f"Executed SQL successfully: {sql}")
             print(f"Response: {response}")
         except Exception as e:
