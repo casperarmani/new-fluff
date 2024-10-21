@@ -71,7 +71,7 @@ def get_current_user(request: Request):
     user_id = session.get("user_id")
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    return SimpleNamespace(id=user_id)
+    return {"id": user_id}
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
@@ -103,7 +103,7 @@ async def signup(form_data: SignupForm):
         return JSONResponse(content={"success": False, "message": "An error occurred during signup"}, status_code=500)
 
 @app.post("/login")
-async def login(form_data: LoginForm):
+async def login(form_data: LoginForm, request: Request):
     try:
         start_time = time.time()
         response = supabase.auth.sign_in_with_password({
@@ -112,22 +112,17 @@ async def login(form_data: LoginForm):
         })
         session = response.session
         if session:
-            # Cache user data in Redis
-            user = get_user_by_email(form_data.email)
-            if redis_client:
-                try:
-                    redis_client.setex(f"user:{user['id']}", 3600, json.dumps(user))
-                    logger.info(f"User {user['id']} cached in Redis")
-                except Exception as e:
-                    logger.error(f"Error caching user in Redis: {str(e)}")
+            # Store user ID in session
+            request.session["user_id"] = str(session.user.id)
             end_time = time.time()
             logger.info(f"Login process time: {end_time - start_time:.2f} seconds")
             return JSONResponse(content={"success": True, "message": "Login successful"}, status_code=200)
         else:
             return JSONResponse(content={"success": False, "message": "Invalid credentials"}, status_code=401)
     except Exception as e:
-        logger.error(f"Error during login: {str(e)}")
-        return JSONResponse(content={"success": False, "message": "An error occurred during login"}, status_code=500)
+        logger.error(f"Login error: {str(e)}")
+        logger.error(traceback.format_exc())
+        return JSONResponse(content={"success": False, "message": "An error occurred during login"}, status_code=400)
 
 @app.post("/logout")
 async def logout(request: Request):
@@ -144,7 +139,7 @@ async def send_message(request: Request, message: str = Form(...), video: Option
     start_time = time.time()
     try:
         current_user = get_current_user(request)
-        user_id = current_user.id
+        user_id = current_user["id"]
 
         if video:
             # Handle video upload and analysis
@@ -177,7 +172,7 @@ async def chat_history(request: Request):
     start_time = time.time()
     try:
         current_user = get_current_user(request)
-        user_id = current_user.id
+        user_id = current_user["id"]
         
         logger.info(f"Fetching chat history for user: {user_id}")
         
@@ -214,7 +209,7 @@ async def video_analysis_history(request: Request):
     start_time = time.time()
     try:
         current_user = get_current_user(request)
-        user_id = uuid.UUID(current_user.id)
+        user_id = uuid.UUID(current_user["id"])
         
         history = get_video_analysis_history(user_id)
         logger.info(f"Retrieved video analysis history for user {user_id}")
