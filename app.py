@@ -14,11 +14,16 @@ import uuid
 import json
 from redis_config import get_redis_client, test_redis_connection
 import redis
+import logging
+import traceback
 
 load_dotenv()
 
 app = FastAPI()
 chatbot = Chatbot()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
@@ -43,17 +48,17 @@ async def startup_event():
     try:
         redis_client = get_redis_client()
         if redis_client:
-            print("Redis client initialized successfully")
-            print(f"Redis connection info: {redis_client.connection_pool.connection_kwargs}")
-            print("Testing Redis connection...")
+            logger.info("Redis client initialized successfully")
+            logger.info(f"Redis connection info: {redis_client.connection_pool.connection_kwargs}")
+            logger.info("Testing Redis connection...")
             if test_redis_connection():
-                print("Redis connection test passed")
+                logger.info("Redis connection test passed")
             else:
-                print("Redis connection test failed")
+                logger.warning("Redis connection test failed")
         else:
-            print("Failed to initialize Redis client")
+            logger.warning("Failed to initialize Redis client")
     except Exception as e:
-        print(f"Error during Redis initialization: {str(e)}")
+        logger.error(f"Error during Redis initialization: {str(e)}")
 
 def get_current_user(request: Request):
     user = request.session.get('user')
@@ -164,7 +169,7 @@ async def send_message(
             try:
                 redis_client.delete(f"video_analysis_history:{user_id}")
             except redis.exceptions.ConnectionError:
-                print("Failed to invalidate video analysis cache due to Redis connection error")
+                logger.error("Failed to invalidate video analysis cache due to Redis connection error")
         return {"response": analysis_result}
     else:
         response = chatbot.send_message(message)
@@ -174,40 +179,55 @@ async def send_message(
             try:
                 redis_client.delete(f"chat_history:{user_id}")
             except redis.exceptions.ConnectionError:
-                print("Failed to invalidate chat history cache due to Redis connection error")
+                logger.error("Failed to invalidate chat history cache due to Redis connection error")
         return {"response": response}
 
 @app.get("/chat_history")
 async def chat_history(request: Request):
     try:
         current_user = get_current_user(request)
-        user_id = uuid.UUID(current_user['id'])
+        user_id = current_user['id']
+        
+        logger.info(f"Fetching chat history for user: {user_id}")
+        
+        if not isinstance(user_id, uuid.UUID):
+            try:
+                user_id = uuid.UUID(user_id)
+            except ValueError:
+                logger.error(f"Invalid user_id format: {user_id}")
+                return JSONResponse({"error": "Invalid user ID format"}, status_code=400)
         
         if redis_client:
             try:
                 cached_history = redis_client.get(f"chat_history:{user_id}")
                 if cached_history:
                     history = json.loads(cached_history)
-                    print(f"Retrieved chat history for user {user_id} from Redis cache")
+                    logger.info(f"Retrieved chat history for user {user_id} from Redis cache")
                     return {"history": history}
-            except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError, json.JSONDecodeError) as e:
-                print(f"Redis error: {str(e)}. Falling back to database.")
+            except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError) as e:
+                logger.warning(f"Redis error: {str(e)}. Falling back to database.")
+            except json.JSONDecodeError as e:
+                logger.error(f"Error decoding cached chat history: {str(e)}")
         
+        logger.info(f"Fetching chat history from database for user: {user_id}")
         history = get_chat_history(user_id)
-        print(f"Retrieved chat history for user {user_id} from database")
+        logger.info(f"Retrieved chat history for user {user_id} from database")
         
         if redis_client:
             try:
                 redis_client.setex(f"chat_history:{user_id}", 300, json.dumps(history))
+                logger.info(f"Cached chat history for user {user_id} in Redis")
             except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError) as e:
-                print(f"Failed to cache chat history: {str(e)}")
+                logger.warning(f"Failed to cache chat history: {str(e)}")
         
         return {"history": history}
     except HTTPException as he:
+        logger.error(f"HTTP Exception in chat_history: {str(he)}")
         raise he
     except Exception as e:
-        print(f"Error in chat_history endpoint: {str(e)}")
-        return JSONResponse({"error": f"An error occurred: {str(e)}"}, status_code=500)
+        logger.error(f"Unexpected error in chat_history endpoint: {str(e)}")
+        logger.error(traceback.format_exc())
+        return JSONResponse({"error": "An unexpected error occurred"}, status_code=500)
 
 @app.get("/video_analysis_history")
 async def video_analysis_history(request: Request):
@@ -220,23 +240,23 @@ async def video_analysis_history(request: Request):
                 cached_history = redis_client.get(f"video_analysis_history:{user_id}")
                 if cached_history:
                     history = json.loads(cached_history)
-                    print(f"Retrieved video analysis history for user {user_id} from Redis cache")
+                    logger.info(f"Retrieved video analysis history for user {user_id} from Redis cache")
                     return {"history": history}
             except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError, json.JSONDecodeError) as e:
-                print(f"Redis error: {str(e)}. Falling back to database.")
+                logger.warning(f"Redis error: {str(e)}. Falling back to database.")
         
         history = get_video_analysis_history(user_id)
-        print(f"Retrieved video analysis history for user {user_id} from database")
+        logger.info(f"Retrieved video analysis history for user {user_id} from database")
         
         if redis_client:
             try:
                 redis_client.setex(f"video_analysis_history:{user_id}", 300, json.dumps(history))
             except (redis.exceptions.ConnectionError, redis.exceptions.ResponseError) as e:
-                print(f"Failed to cache video analysis history: {str(e)}")
+                logger.warning(f"Failed to cache video analysis history: {str(e)}")
         
         return {"history": history}
     except Exception as e:
-        print(f"Error in video_analysis_history endpoint: {str(e)}")
+        logger.error(f"Error in video_analysis_history endpoint: {str(e)}")
         return JSONResponse({"error": "Internal Server Error"}, status_code=500)
 
 if __name__ == '__main__':
