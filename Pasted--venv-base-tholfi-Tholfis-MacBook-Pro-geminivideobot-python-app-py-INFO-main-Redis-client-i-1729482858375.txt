@@ -1,0 +1,112 @@
+(venv) (base) tholfi@Tholfis-MacBook-Pro geminivideobot % python app.py
+INFO:__main__:Redis client initialized successfully
+INFO:     Will watch for changes in these directories: ['/Users/tholfi/Desktop/gods mercy/GeminiVideoBot']
+INFO:uvicorn.error:Will watch for changes in these directories: ['/Users/tholfi/Desktop/gods mercy/GeminiVideoBot']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:uvicorn.error:Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [86463] using statreload
+INFO:uvicorn.error:Started reloader process [86463] using statreload
+INFO:__mp_main__:Redis client initialized successfully
+INFO:app:Redis client initialized successfully
+INFO:     Started server process [86468]
+INFO:uvicorn.error:Started server process [86468]
+INFO:     Waiting for application startup.
+INFO:uvicorn.error:Waiting for application startup.
+INFO:redis_config:Successfully connected to Redis
+INFO:     Application startup complete.
+INFO:uvicorn.error:Application startup complete.
+INFO:     127.0.0.1:63472 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63472 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63472 - "GET /login HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/auth/v1/token?grant_type=password "HTTP/1.1 200 OK"
+INFO:redis_config:Redis get_cached_user time: 1.09 seconds
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=%2A&email=eq.wicked%40gmail.com "HTTP/1.1 200 OK"
+INFO:redis_config:Redis cache_user time: 0.52 seconds
+INFO:app:User wicked@gmail.com cached
+INFO:app:Login process time: 3.18 seconds
+INFO:     127.0.0.1:63473 - "POST /login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63473 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63473 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:redis_config:No chat history found in Redis cache for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:redis_config:Redis get_session_history time: 0.53 seconds
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=50 "HTTP/1.1 200 OK"
+INFO:redis_config:Redis update_chat_history time: 0.70 seconds
+INFO:redis_config:Redis update_chat_history time: 0.67 seconds
+INFO:redis_config:Redis update_chat_history time: 0.73 seconds
+INFO:redis_config:Redis update_chat_history time: 0.65 seconds
+INFO:redis_config:Redis update_chat_history time: 0.68 seconds
+INFO:redis_config:Redis update_chat_history time: 0.68 seconds
+INFO:redis_config:Redis update_chat_history time: 0.68 seconds
+INFO:redis_config:Redis update_chat_history time: 0.71 seconds
+INFO:redis_config:Redis update_chat_history time: 0.66 seconds
+INFO:redis_config:Redis update_chat_history time: 0.71 seconds
+INFO:redis_config:Redis update_chat_history time: 0.71 seconds
+INFO:redis_config:Redis update_chat_history time: 0.67 seconds
+INFO:redis_config:Redis update_chat_history time: 0.69 seconds
+INFO:redis_config:Redis update_chat_history time: 0.70 seconds
+INFO:redis_config:Redis update_chat_history time: 0.69 seconds
+INFO:redis_config:Redis update_chat_history time: 0.71 seconds
+INFO:redis_config:Redis update_chat_history time: 0.73 seconds
+INFO:redis_config:Redis update_chat_history time: 0.71 seconds
+INFO:redis_config:Redis update_chat_history time: 0.71 seconds
+INFO:redis_config:Redis update_chat_history time: 0.70 seconds
+INFO:redis_config:Redis update_chat_history time: 0.71 seconds
+INFO:redis_config:Redis update_chat_history time: 0.69 seconds
+INFO:redis_config:Redis update_chat_history time: 0.70 seconds
+INFO:redis_config:Redis update_chat_history time: 0.69 seconds
+INFO:redis_config:Redis update_chat_history time: 0.69 seconds
+INFO:redis_config:Redis update_chat_history time: 0.68 seconds
+INFO:redis_config:Redis update_chat_history time: 0.69 seconds
+INFO:redis_config:Redis update_chat_history time: 0.68 seconds
+INFO:redis_config:Redis update_chat_history time: 0.69 seconds
+INFO:redis_config:Redis update_chat_history time: 0.71 seconds
+INFO:redis_config:Redis update_chat_history time: 0.67 seconds
+INFO:redis_config:Redis update_chat_history time: 0.69 seconds
+INFO:redis_config:Redis update_chat_history time: 0.64 seconds
+INFO:redis_config:Redis update_chat_history time: 0.69 seconds
+INFO:redis_config:Redis update_chat_history time: 0.72 seconds
+INFO:redis_config:Redis update_chat_history time: 0.66 seconds
+INFO:redis_config:Redis update_chat_history time: 0.70 seconds
+INFO:redis_config:Redis update_chat_history time: 0.66 seconds
+INFO:redis_config:Redis update_chat_history time: 0.68 seconds
+INFO:redis_config:Redis update_chat_history time: 0.70 seconds
+INFO:redis_config:Redis update_chat_history time: 0.68 seconds
+INFO:redis_config:Redis update_chat_history time: 0.66 seconds
+INFO:redis_config:Redis update_chat_history time: 0.71 seconds
+INFO:redis_config:Redis update_chat_history time: 0.70 seconds
+INFO:redis_config:Redis update_chat_history time: 0.67 seconds
+INFO:redis_config:Redis update_chat_history time: 0.67 seconds
+INFO:redis_config:Redis update_chat_history time: 0.68 seconds
+INFO:redis_config:Redis update_chat_history time: 0.64 seconds
+INFO:redis_config:Redis update_chat_history time: 0.68 seconds
+INFO:redis_config:Redis update_chat_history time: 0.69 seconds
+INFO:app:Retrieved chat history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:app:Total chat history processing time: 35.95 seconds
+INFO:     127.0.0.1:63473 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=10 "HTTP/1.1 200 OK"
+INFO:app:Retrieved video analysis history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:app:Total video analysis history processing time: 0.37 seconds
+INFO:     127.0.0.1:63481 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:redis_config:Retrieved chat history for user e5fb9299-3a16-4453-9586-2735c521d843 from Redis cache
+INFO:redis_config:Redis get_session_history time: 0.59 seconds
+INFO:chatbot:Session history processing time: 14.16 seconds
+INFO:chatbot:Gemini API call time: 2.13 seconds
+INFO:chatbot:Total message processing time: 16.28 seconds
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:redis_config:Redis update_chat_history time: 0.75 seconds
+INFO:redis_config:Redis update_chat_history time: 0.68 seconds
+INFO:app:Total send_message processing time: 20.24 seconds
+INFO:     127.0.0.1:63543 - "POST /send_message HTTP/1.1" 200 OK
+INFO:redis_config:Retrieved chat history for user e5fb9299-3a16-4453-9586-2735c521d843 from Redis cache
+INFO:redis_config:Redis get_session_history time: 0.52 seconds
+INFO:app:Retrieved chat history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:app:Total chat history processing time: 0.52 seconds
+INFO:     127.0.0.1:63543 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=10 "HTTP/1.1 200 OK"
+INFO:app:Retrieved video analysis history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:app:Total video analysis history processing time: 0.22 seconds
+INFO:     127.0.0.1:63553 - "GET /video_analysis_history HTTP/1.1" 200 OK
