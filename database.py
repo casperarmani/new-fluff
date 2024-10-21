@@ -44,57 +44,19 @@ def insert_chat_message(user_id: uuid.UUID, message: str, chat_type: str = 'text
         "TIMESTAMP": time.time()
     }
     
-    # Write to Redis first (Write-through caching)
-    if redis_client:
-        try:
-            cache_key = f"chat_history:{user_id}"
-            cached_history = redis_client.get(cache_key)
-            if cached_history:
-                history = json.loads(cached_history)
-                history.insert(0, new_message)
-                redis_client.setex(cache_key, 3600, json.dumps(history[:50]))  # Cache for 1 hour
-            else:
-                redis_client.setex(cache_key, 3600, json.dumps([new_message]))
-            logger.info(f"Chat message cached for user {user_id}")
-        except Exception as e:
-            logger.error(f"Error updating Redis cache: {str(e)}")
-    
-    # Then write to Supabase
+    # Write only to Supabase
     response = supabase.table("user_chat_history").insert(new_message).execute()
     logger.info(f"Chat message inserted into Supabase for user {user_id}")
     
     return response.data[0] if response.data else new_message
 
 def get_chat_history(user_id: uuid.UUID, limit: int = 50) -> List[Dict]:
-    cache_key = f"chat_history:{user_id}"
-    
-    # Try to get from Redis cache first
-    if redis_client:
-        try:
-            start_time = time.time()
-            cached_history = redis_client.get(cache_key)
-            if cached_history:
-                history = json.loads(cached_history)[:limit]
-                logger.info(f"Chat history retrieved from Redis cache for user {user_id}")
-                logger.info(f"Redis get_chat_history time: {time.time() - start_time:.2f} seconds")
-                return history
-        except Exception as e:
-            logger.error(f"Error retrieving from Redis cache: {str(e)}")
-    
-    # If not in cache or error occurred, get from Supabase
+    # Fetch directly from Supabase
     start_time = time.time()
     response = supabase.table("user_chat_history").select("*").eq("user_id", str(user_id)).order("TIMESTAMP", desc=True).limit(limit).execute()
     history = response.data
     logger.info(f"Chat history retrieved from Supabase for user {user_id}")
     logger.info(f"Supabase get_chat_history time: {time.time() - start_time:.2f} seconds")
-    
-    # Update Redis cache
-    if redis_client:
-        try:
-            redis_client.setex(cache_key, 3600, json.dumps(history))  # Cache for 1 hour
-            logger.info(f"Chat history cached in Redis for user {user_id}")
-        except Exception as e:
-            logger.error(f"Error updating Redis cache: {str(e)}")
     
     return history
 
@@ -108,77 +70,41 @@ def insert_video_analysis(user_id: uuid.UUID, upload_file_name: str, analysis: s
         "TIMESTAMP": time.time()
     }
     
-    # Write to Redis first (Write-through caching)
-    if redis_client:
-        try:
-            cache_key = f"video_analysis_history:{user_id}"
-            cached_history = redis_client.get(cache_key)
-            if cached_history:
-                history = json.loads(cached_history)
-                history.insert(0, new_analysis)
-                redis_client.setex(cache_key, 3600, json.dumps(history[:10]))  # Cache for 1 hour
-            else:
-                redis_client.setex(cache_key, 3600, json.dumps([new_analysis]))
-            logger.info(f"Video analysis cached for user {user_id}")
-        except Exception as e:
-            logger.error(f"Error updating Redis cache: {str(e)}")
-    
-    # Then write to Supabase
+    # Write only to Supabase
     response = supabase.table("video_analysis_output").insert(new_analysis).execute()
     logger.info(f"Video analysis inserted into Supabase for user {user_id}")
     
     return response.data[0] if response.data else new_analysis
 
 def get_video_analysis_history(user_id: uuid.UUID, limit: int = 10) -> List[Dict]:
-    cache_key = f"video_analysis_history:{user_id}"
-    
-    # Try to get from Redis cache first
-    if redis_client:
-        try:
-            start_time = time.time()
-            cached_history = redis_client.get(cache_key)
-            if cached_history:
-                history = json.loads(cached_history)[:limit]
-                logger.info(f"Video analysis history retrieved from Redis cache for user {user_id}")
-                logger.info(f"Redis get_video_analysis_history time: {time.time() - start_time:.2f} seconds")
-                return history
-        except Exception as e:
-            logger.error(f"Error retrieving from Redis cache: {str(e)}")
-    
-    # If not in cache or error occurred, get from Supabase
+    # Fetch directly from Supabase
     start_time = time.time()
     response = supabase.table("video_analysis_output").select("*").eq("user_id", str(user_id)).order("TIMESTAMP", desc=True).limit(limit).execute()
     history = response.data
     logger.info(f"Video analysis history retrieved from Supabase for user {user_id}")
     logger.info(f"Supabase get_video_analysis_history time: {time.time() - start_time:.2f} seconds")
     
-    # Update Redis cache
-    if redis_client:
-        try:
-            redis_client.setex(cache_key, 3600, json.dumps(history))  # Cache for 1 hour
-            logger.info(f"Video analysis history cached in Redis for user {user_id}")
-        except Exception as e:
-            logger.error(f"Error updating Redis cache: {str(e)}")
-    
     return history
 
-def update_session_context(user_id: uuid.UUID, context: Dict):
-    cache_key = f"session_context:{user_id}"
+def get_recent_chat_context(user_id: uuid.UUID, limit: int = 10) -> List[Dict]:
+    cache_key = f"chat_context:{user_id}"
     if redis_client:
         try:
-            redis_client.setex(cache_key, 3600, json.dumps(context))  # Set expiration to 1 hour
-            logger.info(f"Session context updated in Redis for user {user_id}")
-        except Exception as e:
-            logger.error(f"Error updating session context in Redis: {str(e)}")
-
-def get_session_context(user_id: uuid.UUID) -> Dict:
-    cache_key = f"session_context:{user_id}"
-    if redis_client:
-        try:
-            context = redis_client.get(cache_key)
+            context = redis_client.lrange(cache_key, 0, limit - 1)
             if context:
-                logger.info(f"Session context retrieved from Redis for user {user_id}")
-                return json.loads(context)
+                return [json.loads(message) for message in context]
         except Exception as e:
-            logger.error(f"Error retrieving session context from Redis: {str(e)}")
-    return {}
+            logger.error(f"Error retrieving chat context from Redis: {str(e)}")
+    return []
+
+def update_chat_context(user_id: uuid.UUID, message: Dict):
+    cache_key = f"chat_context:{user_id}"
+    if redis_client:
+        try:
+            redis_client.lpush(cache_key, json.dumps(message))
+            redis_client.ltrim(cache_key, 0, 9)  # Keep only the last 10 messages
+            logger.info(f"Chat context updated in Redis for user {user_id}")
+        except Exception as e:
+            logger.error(f"Error updating chat context in Redis: {str(e)}")
+
+# Remove the update_session_context and get_session_context functions as they are no longer needed

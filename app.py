@@ -20,6 +20,8 @@ from database import (
     insert_video_analysis,
     get_video_analysis_history,
     create_user,
+    get_recent_chat_context,
+    update_chat_context
 )
 from chatbot import Chatbot
 from redis_config import get_redis_client, test_redis_connection
@@ -158,6 +160,10 @@ async def send_message(request: Request, message: str = Form(...), video: Option
         # Insert user message and bot response into chat history
         insert_chat_message(uuid.UUID(user_id), message, 'user')
         insert_chat_message(uuid.UUID(user_id), response, 'bot')
+
+        # Update chat context in Redis
+        update_chat_context(uuid.UUID(user_id), {"role": "user", "message": message})
+        update_chat_context(uuid.UUID(user_id), {"role": "model", "message": response})
 
         end_time = time.time()
         logger.info(f"Total send_message processing time: {end_time - start_time:.2f} seconds")

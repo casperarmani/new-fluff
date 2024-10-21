@@ -1,0 +1,60 @@
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     172.31.196.35:57808 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.35:57808 - "GET /styles.css HTTP/1.1" 200 OK
+INFO:     172.31.196.35:57808 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:     172.31.196.35:57808 - "GET / HTTP/1.1" 200 OK00 OK
+INFO:     172.31.196.35:57808 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:     172.31.196.35:57808 - "GET /login HTTP/1.1" 200 OK
+INFO:     172.31.196.35:58006 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.35:58006 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:     172.31.196.35:58006 - "GET /login HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/auth/v1/token?grant_type=password "HTTP/1.1 200 OK"
+INFO:app:Login process time: 1.05 seconds
+INFO:     172.31.196.35:35290 - "POST /login HTTP/1.1" 200 OK
+INFO:     172.31.196.35:35290 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.35:60020 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output?select=%2A&user_id=eq.031883d5-6402-45c8-8977-260fc264694e&order=TIMESTAMP.desc&limit=10 "HTTP/1.1 200 OK"
+INFO:database:Video analysis history retrieved from Supabase for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:database:Supabase get_video_analysis_history time: 1.19 seconds
+INFO:database:Video analysis history cached in Redis for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:app:Retrieved video analysis history for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:app:Total video analysis history processing time: 2.14 seconds
+INFO:     172.31.196.35:60020 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:app:Fetching chat history for user: 031883d5-6402-45c8-8977-260fc264694e
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history?select=%2A&user_id=eq.031883d5-6402-45c8-8977-260fc264694e&order=TIMESTAMP.desc&limit=50 "HTTP/1.1 200 OK"
+INFO:database:Chat history retrieved from Supabase for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:database:Supabase get_chat_history time: 0.28 seconds
+INFO:database:Chat history cached in Redis for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:app:Retrieved chat history for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:app:Total chat history processing time: 0.73 seconds
+INFO:     172.31.196.35:60028 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:     172.31.196.35:42412 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.35:42412 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:app:Fetching chat history for user: 031883d5-6402-45c8-8977-260fc264694e
+INFO:database:Chat history retrieved from Redis cache for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:database:Redis get_chat_history time: 0.22 seconds
+INFO:app:Retrieved chat history for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:app:Total chat history processing time: 0.22 seconds
+INFO:     172.31.196.35:42412 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:database:Video analysis history retrieved from Redis cache for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:database:Redis get_video_analysis_history time: 0.22 seconds
+INFO:app:Retrieved video analysis history for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:app:Total video analysis history processing time: 0.22 seconds
+INFO:     172.31.196.35:42414 - "GET /video_analysis_history HTTP/1.1" 200 OK
+ERROR:database:Error updating session context in Redis: Object of type Content is not JSON serializable
+INFO:chatbot:Total message processing time: 2.46 seconds
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.031883d5-6402-45c8-8977-260fc264694e "HTTP/1.1 200 OK"
+ERROR:app:Error in send_message: User with id 031883d5-6402-45c8-8977-260fc264694e does not exist
+INFO:     172.31.196.35:51492 - "POST /send_message HTTP/1.1" 500 Internal Server Error
+INFO:database:Video analysis history retrieved from Redis cache for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:database:Redis get_video_analysis_history time: 0.22 seconds
+INFO:app:Retrieved video analysis history for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:app:Total video analysis history processing time: 0.22 seconds
+INFO:     172.31.196.35:51492 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:app:Fetching chat history for user: 031883d5-6402-45c8-8977-260fc264694e
+INFO:database:Chat history retrieved from Redis cache for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:database:Redis get_chat_history time: 0.22 seconds
+INFO:app:Retrieved chat history for user 031883d5-6402-45c8-8977-260fc264694e
+INFO:app:Total chat history processing time: 0.22 seconds
+INFO:     172.31.196.35:44338 - "GET /chat_history HTTP/1.1" 200 OK
