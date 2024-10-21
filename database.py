@@ -36,11 +36,11 @@ async def async_insert_chat_message(user_id: uuid.UUID, message: str, chat_type:
         "user_id": str(user_id),
         "message": message,
         "chat_type": chat_type,
-        "timestamp": int(asyncio.get_event_loop().time())
+        "TIMESTAMP": int(asyncio.get_event_loop().time())
     }
 
     try:
-        # Update Redis cache
+        # Update Redis cache (write-through)
         cached_history = redis_client.get(cache_key)
         if cached_history:
             history = json.loads(cached_history)
@@ -49,8 +49,8 @@ async def async_insert_chat_message(user_id: uuid.UUID, message: str, chat_type:
         else:
             redis_client.setex(cache_key, CHAT_SESSION_TTL, json.dumps([new_message]))
 
-        # Asynchronously write to database
-        asyncio.create_task(write_messages_to_db(user_id, [new_message]))
+        # Write to database (write-through)
+        await write_messages_to_db(user_id, [new_message])
 
         return new_message
     except Exception as e:
@@ -70,25 +70,19 @@ def get_chat_history(user_id: uuid.UUID, limit: int = 50) -> List[Dict]:
     
     # If not in cache or error occurred, get from Supabase
     try:
-        response = supabase.table("user_chat_history").select("*").eq("user_id", str(user_id)).order("timestamp", desc=True).limit(limit).execute()
-    except Exception as e:
-        logger.error(f"Error retrieving from Supabase (timestamp): {str(e)}")
-        # If timestamp doesn't exist, try with created_at
+        response = supabase.table("user_chat_history").select("*").eq("user_id", str(user_id)).order("TIMESTAMP", desc=True).limit(limit).execute()
+        history = response.data
+        
+        # Update Redis cache
         try:
-            response = supabase.table("user_chat_history").select("*").eq("user_id", str(user_id)).order("created_at", desc=True).limit(limit).execute()
+            redis_client.setex(cache_key, CHAT_SESSION_TTL, json.dumps(history))
         except Exception as e:
-            logger.error(f"Error retrieving from Supabase (created_at): {str(e)}")
-            return []
-
-    history = response.data
-    
-    # Update Redis cache
-    try:
-        redis_client.setex(cache_key, CHAT_SESSION_TTL, json.dumps(history))
+            logger.error(f"Error updating Redis cache: {str(e)}")
+        
+        return history
     except Exception as e:
-        logger.error(f"Error updating Redis cache: {str(e)}")
-    
-    return history
+        logger.error(f"Error retrieving from Supabase: {str(e)}")
+        return []
 
 def create_user(email: str) -> Dict:
     response = supabase.table("users").insert({"email": email}).execute()
@@ -102,15 +96,33 @@ def check_user_exists(user_id: uuid.UUID) -> bool:
     response = supabase.table("users").select("id").eq("id", str(user_id)).execute()
     return len(response.data) > 0
 
-def insert_video_analysis(user_id: uuid.UUID, upload_file_name: str, analysis: str, video_duration: Optional[str] = None, video_format: Optional[str] = None) -> Dict:
-    response = supabase.table("video_analysis_output").insert({
+async def insert_video_analysis(user_id: uuid.UUID, upload_file_name: str, analysis: str, video_duration: Optional[str] = None, video_format: Optional[str] = None) -> Dict:
+    new_analysis = {
         "user_id": str(user_id),
         "upload_file_name": upload_file_name,
         "analysis": analysis,
         "video_duration": video_duration,
-        "video_format": video_format
-    }).execute()
-    return response.data[0] if response.data else {}
+        "video_format": video_format,
+        "TIMESTAMP": int(asyncio.get_event_loop().time())
+    }
+
+    try:
+        # Update Redis cache (write-through)
+        cache_key = f"video_analysis_history:{user_id}"
+        cached_history = redis_client.get(cache_key)
+        if cached_history:
+            history = json.loads(cached_history)
+            history.insert(0, new_analysis)
+            redis_client.setex(cache_key, CHAT_SESSION_TTL, json.dumps(history[:10]))
+        else:
+            redis_client.setex(cache_key, CHAT_SESSION_TTL, json.dumps([new_analysis]))
+
+        # Write to database (write-through)
+        response = supabase.table("video_analysis_output").insert(new_analysis).execute()
+        return response.data[0] if response.data else {}
+    except Exception as e:
+        logger.error(f"Error inserting video analysis: {str(e)}")
+        return {}
 
 def get_video_analysis_history(user_id: uuid.UUID, limit: int = 10) -> List[Dict]:
     cache_key = f"video_analysis_history:{user_id}"
@@ -125,22 +137,16 @@ def get_video_analysis_history(user_id: uuid.UUID, limit: int = 10) -> List[Dict
     
     # If not in cache or error occurred, get from Supabase
     try:
-        response = supabase.table("video_analysis_output").select("*").eq("user_id", str(user_id)).order("timestamp", desc=True).limit(limit).execute()
-    except Exception as e:
-        logger.error(f"Error retrieving from Supabase (timestamp): {str(e)}")
-        # If timestamp doesn't exist, try with created_at
+        response = supabase.table("video_analysis_output").select("*").eq("user_id", str(user_id)).order("TIMESTAMP", desc=True).limit(limit).execute()
+        history = response.data
+        
+        # Update Redis cache
         try:
-            response = supabase.table("video_analysis_output").select("*").eq("user_id", str(user_id)).order("created_at", desc=True).limit(limit).execute()
+            redis_client.setex(cache_key, CHAT_SESSION_TTL, json.dumps(history))
         except Exception as e:
-            logger.error(f"Error retrieving from Supabase (created_at): {str(e)}")
-            return []
-
-    history = response.data
-    
-    # Update Redis cache
-    try:
-        redis_client.setex(cache_key, CHAT_SESSION_TTL, json.dumps(history))
+            logger.error(f"Error updating Redis cache: {str(e)}")
+        
+        return history
     except Exception as e:
-        logger.error(f"Error updating Redis cache: {str(e)}")
-    
-    return history
+        logger.error(f"Error retrieving from Supabase: {str(e)}")
+        return []
